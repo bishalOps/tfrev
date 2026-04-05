@@ -1,0 +1,25 @@
+{
+  "review": {
+    "verdict": "PASS",
+    "confidence": 0.95,
+    "summary": "All plan changes are directly explained by the code diff. No security concerns detected.",
+    "findings": [],
+    "stats": {
+      "resources_reviewed": 1,
+      "resources_changing": 1,
+      "resources_created": 1,
+      "resources_updated": 0,
+      "resources_deleted": 0,
+      "resources_replaced": 0,
+      "findings_by_severity": {
+        "critical": 0,
+        "high": 0,
+        "medium": 0,
+        "low": 0,
+        "info": 0
+      }
+    },
+    "unmapped_plan_changes": [],
+    "unmapped_code_changes": []
+  }
+}

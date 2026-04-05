@@ -1,0 +1,27 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.7.0",
+  "resource_changes": [
+    {
+      "address": "aws_db_instance.main",
+      "type": "aws_db_instance",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "identifier": "main-db",
+          "engine": "postgres",
+          "password": "supersecret123"
+        },
+        "after_unknown": {
+          "endpoint": true
+        },
+        "before_sensitive": {},
+        "after_sensitive": {
+          "password": true
+        }
+      }
+    }
+  ]
+}

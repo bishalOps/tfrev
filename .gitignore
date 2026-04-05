@@ -1,0 +1,40 @@
+# Terraform
+.terraform/
+*.terraform.lock.hcl
+*.tfplan
+*.tfstate
+*.tfstate.backup
+
+# Secrets / local overrides
+*.auto.tfvars
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
+venv/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# tfrev local artifacts
+
+# Test artifacts
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+uv.lock

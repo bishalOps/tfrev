@@ -1,0 +1,108 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.7.0",
+  "resource_changes": [
+    {
+      "address": "aws_instance.web",
+      "type": "aws_instance",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "ami": "ami-0c55b159cbfafe1f0",
+          "instance_type": "t3.micro"
+        },
+        "after_unknown": {"id": true},
+        "before_sensitive": {},
+        "after_sensitive": {}
+      }
+    },
+    {
+      "address": "aws_security_group.web_sg",
+      "type": "aws_security_group",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["update"],
+        "before": {
+          "ingress_cidr": "10.0.0.0/8",
+          "name": "web-sg"
+        },
+        "after": {
+          "ingress_cidr": "0.0.0.0/0",
+          "name": "web-sg"
+        },
+        "after_unknown": {},
+        "before_sensitive": {},
+        "after_sensitive": {}
+      }
+    },
+    {
+      "address": "aws_db_instance.old_db",
+      "type": "aws_db_instance",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["delete"],
+        "before": {
+          "identifier": "old-db",
+          "engine": "mysql"
+        },
+        "after": null,
+        "after_unknown": {},
+        "before_sensitive": {},
+        "after_sensitive": {}
+      }
+    },
+    {
+      "address": "aws_s3_bucket.assets",
+      "type": "aws_s3_bucket",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["delete", "create"],
+        "before": {
+          "bucket": "assets-old",
+          "acl": "private"
+        },
+        "after": {
+          "bucket": "assets-new",
+          "acl": "private"
+        },
+        "after_unknown": {"id": true},
+        "before_sensitive": {},
+        "after_sensitive": {}
+      }
+    },
+    {
+      "address": "aws_route53_record.www",
+      "type": "aws_route53_record",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["no-op"],
+        "before": {"name": "www.example.com"},
+        "after": {"name": "www.example.com"},
+        "after_unknown": {},
+        "before_sensitive": {},
+        "after_sensitive": {}
+      }
+    },
+    {
+      "address": "module.vpc.aws_subnet.private",
+      "module_address": "module.vpc",
+      "type": "aws_subnet",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"cidr_block": "10.0.1.0/24"},
+        "after_unknown": {"id": true},
+        "before_sensitive": {},
+        "after_sensitive": {}
+      }
+    }
+  ],
+  "planned_values": {
+    "root_module": {
+      "resources": []
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.7.0",
+  "resource_changes": [
+    {
+      "address": "aws_instance.web",
+      "module_address": null,
+      "type": "aws_instance",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "ami": "ami-0c55b159cbfafe1f0",
+          "instance_type": "t3.micro",
+          "tags": {
+            "Name": "web-server",
+            "Environment": "dev"
+          }
+        },
+        "after_unknown": {
+          "id": true,
+          "public_ip": true,
+          "private_ip": true
+        },
+        "before_sensitive": {},
+        "after_sensitive": {}
+      }
+    }
+  ],
+  "planned_values": {
+    "root_module": {
+      "resources": []
+    }
+  }
+}

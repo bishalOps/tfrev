@@ -1,0 +1,26 @@
+model: claude-sonnet-4-6
+max_tokens: 8192
+severity_threshold: medium
+fail_on: critical
+
+policies:
+  - name: no-public-ingress
+    description: "Flag security group rules allowing 0.0.0.0/0"
+    severity: critical
+  - name: require-standard-tags
+    description: "All resources must have Environment and Team tags"
+    required_tags: ["Environment", "Team"]
+    severity: medium
+  - name: blast-radius-limit
+    description: "Flag if more than 10 resources modified"
+    threshold: 10
+    severity: high
+
+sensitive_resources:
+  - aws_iam_*
+  - aws_security_group*
+  - aws_kms_key
+
+ignore:
+  - "*.auto.tfvars"
+  - "backend.tf"

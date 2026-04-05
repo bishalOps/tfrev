@@ -1,0 +1,87 @@
+# GitLab CI template for tfrev
+# Include this in your .gitlab-ci.yml:
+#   include:
+#     - remote: 'https://raw.githubusercontent.com/bishalOps/tfrev/main/ci/gitlab/.gitlab-ci-template.yml'
+#
+# Required CI/CD variables:
+#   ANTHROPIC_API_KEY - Your Anthropic API key (Settings > CI/CD > Variables, masked)
+#
+# Optional CI/CD variables:
+#   TFREV_MODEL         - Claude model (default: claude-sonnet-4-6)
+#   TFREV_FAIL_ON       - Minimum severity to fail (default: high)
+#   TF_WORKING_DIR      - Terraform directory (default: .)
+
+.tfrev_defaults:
+  variables:
+    TFREV_MODEL: "claude-sonnet-4-6"
+    TFREV_FAIL_ON: "high"
+    TFREV_SEVERITY_THRESHOLD: "low"
+    TF_WORKING_DIR: "."
+
+# ---- Stage: plan ----
+terraform_plan:
+  extends: .tfrev_defaults
+  stage: plan
+  image: hashicorp/terraform:1.7
+  script:
+    - cd ${TF_WORKING_DIR}
+    - terraform init -input=false
+    - terraform plan -input=false -out=tfplan
+    - terraform show -json tfplan > plan.json
+  artifacts:
+    paths:
+      - ${TF_WORKING_DIR}/plan.json
+      - ${TF_WORKING_DIR}/tfplan
+    expire_in: 1 hour
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - "**/*.tf"
+        - "**/*.tfvars"
+
+# ---- Stage: review ----
+tfrev_review:
+  extends: .tfrev_defaults
+  stage: test
+  image: python:3.11-slim
+  needs: ["terraform_plan"]
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git > /dev/null
+  script:
+    - pip install --quiet tfrev
+
+    # Run review — tfrev auto-generates the diff via git
+    # CI_MERGE_REQUEST_TARGET_BRANCH_NAME is auto-detected as the base ref
+    - |
+      cd ${TF_WORKING_DIR}
+      tfrev review \
+        --plan plan.json \
+        --output markdown \
+        --model ${TFREV_MODEL} \
+        --fail-on ${TFREV_FAIL_ON} \
+        --severity-threshold ${TFREV_SEVERITY_THRESHOLD} \
+        > review.md 2>review-log.txt || REVIEW_EXIT=$?
+
+    # Post review as MR comment
+    - |
+      if [ -f "${TF_WORKING_DIR}/review.md" ]; then
+        BODY=$(cat ${TF_WORKING_DIR}/review.md)
+        curl --silent --request POST \
+          --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
+          --header "Content-Type: application/json" \
+          --data "$(jq -n --arg body "$BODY" '{body: $body}')" \
+          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests/${CI_MERGE_REQUEST_IID}/notes"
+      fi
+
+    - exit ${REVIEW_EXIT:-0}
+
+  artifacts:
+    paths:
+      - ${TF_WORKING_DIR}/review.md
+    expire_in: 1 week
+    when: always
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - "**/*.tf"
+        - "**/*.tfvars"

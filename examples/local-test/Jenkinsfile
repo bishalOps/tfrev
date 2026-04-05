@@ -1,0 +1,133 @@
+// Jenkinsfile — Local testing of tfrev
+//
+// Prerequisites:
+//   - Jenkins running locally (e.g. via Docker or jenkins.war)
+//   - Python 3.9+ installed on the Jenkins agent
+//   - ANTHROPIC_API_KEY stored as a Jenkins Secret Text credential
+//   - curl, unzip available on the agent (Terraform is installed automatically)
+//
+// How to use:
+//   1. In Jenkins, create a new Pipeline job
+//   2. Under "Pipeline", choose "Pipeline script from SCM" and point at this repo
+//      OR paste this file directly into a Pipeline script
+//   3. Set "Script Path" to: examples/local-test/Jenkinsfile
+//   4. Add your ANTHROPIC_API_KEY as a credential (Manage Jenkins > Credentials)
+//   5. Build the job
+
+pipeline {
+    agent any
+
+    parameters {
+        choice(
+            name: 'TFREV_FAIL_ON',
+            choices: ['high', 'critical', 'medium', 'low', 'info'],
+            description: 'Minimum severity level to fail the build'
+        )
+        choice(
+            name: 'OUTPUT_FORMAT',
+            choices: ['table', 'markdown', 'json'],
+            description: 'Review output format'
+        )
+        string(
+            name: 'TFREV_MODEL',
+            defaultValue: 'claude-sonnet-4-6',
+            description: 'Claude model to use'
+        )
+    }
+
+    environment {
+        TF_IN_AUTOMATION = 'true'
+        TF_INPUT         = '0'
+        TERRAFORM_DIR    = 'examples/local-test'
+        PATH             = "${env.HOME}/.local/bin:${env.WORKSPACE}/.venv/bin:${env.PATH}"
+        UV_LINK_MODE     = 'copy'
+    }
+
+    stages {
+
+        stage('Install tools') {
+            steps {
+                // Install uv, create a venv, and install tfrev from this repo
+                sh 'curl -LsSf https://astral.sh/uv/install.sh | sh'
+                sh 'uv venv --clear .venv'
+                sh 'uv pip install -e .'
+                sh 'tfrev --version'
+
+                // Install Terraform if not already present
+                sh '''
+                    if ! command -v terraform >/dev/null 2>&1; then
+                        TF_VERSION=1.10.5
+                        curl -fsSL "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip" -o /tmp/terraform.zip
+                        unzip -o /tmp/terraform.zip -d $HOME/.local/bin
+                        rm /tmp/terraform.zip
+                    fi
+                    terraform version
+                '''
+            }
+        }
+
+        stage('Terraform Init') {
+            steps {
+                dir("${env.TERRAFORM_DIR}") {
+                    sh 'terraform init -input=false'
+                }
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                dir("${env.TERRAFORM_DIR}") {
+                    sh '''
+                        terraform plan -input=false -out=tfplan
+                        terraform show -json tfplan > plan.json
+                    '''
+                }
+            }
+        }
+
+        stage('AI Plan Review') {
+            steps {
+                withCredentials([string(credentialsId: 'ANTHROPIC_API_KEY', variable: 'ANTHROPIC_API_KEY')]) {
+                    dir("${env.TERRAFORM_DIR}") {
+                        script {
+                            // tfrev auto-generates the diff via git
+                            def reviewStatus = sh(
+                                script: """
+                                    tfrev review \\
+                                        --plan plan.json \\
+                                        --output ${params.OUTPUT_FORMAT} \\
+                                        --model ${params.TFREV_MODEL} \\
+                                        --fail-on ${params.TFREV_FAIL_ON}
+                                """,
+                                returnStatus: true
+                            )
+
+                            if (reviewStatus == 2) {
+                                error("tfrev encountered an error (exit code 2). Check logs above.")
+                            }
+
+                            if (reviewStatus == 1) {
+                                // Archive artifacts before failing
+                                unstable("tfrev flagged findings at or above '${params.TFREV_FAIL_ON}' severity.")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            dir("${env.TERRAFORM_DIR}") {
+                archiveArtifacts artifacts: 'plan.json', allowEmptyArchive: true
+            }
+        }
+        success {
+            echo 'tfrev review passed — no blocking findings detected.'
+        }
+        unstable {
+            echo 'tfrev review flagged issues. See the console output above.'
+        }
+    }
+}

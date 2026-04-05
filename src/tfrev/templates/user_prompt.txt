@@ -1,0 +1,24 @@
+Review the following Terraform plan against the code diff and provide your analysis.
+
+## TERRAFORM PLAN DATA
+
+The following resource changes were extracted from `terraform show -json`:
+
+{plan_data}
+
+## CODE DIFF
+
+The following changes were made to Terraform files:
+
+{code_diff}
+
+## TERRAFORM SOURCE FILES (Context)
+
+The following source files are relevant to the changes and provide additional context
+for understanding the resource definitions, variables, and module configurations:
+
+{context_files_section}
+
+{policies_section}
+
+Analyze the plan against the code diff. Verify that every plan change is explained by a code change, identify any security concerns, assess blast radius, and check for unexpected side effects. Respond with the JSON review format specified in your instructions.

@@ -1,0 +1,53 @@
+# .tfrev.yaml — tfrev configuration
+# Place this file in your Terraform project root.
+
+# Claude model to use for reviews
+model: claude-sonnet-4-6
+
+# Maximum response tokens
+max_tokens: 4096
+
+# Minimum severity to include in output (info, low, medium, high, critical)
+severity_threshold: low
+
+# Exit code 1 if any finding is at or above this severity
+fail_on: high
+
+# Custom review policies — these are checked in addition to the built-in rules
+policies:
+  - name: no-public-ingress
+    description: "Flag any security group rule allowing ingress from 0.0.0.0/0"
+    severity: critical
+
+  - name: blast-radius-limit
+    description: "Flag if more than 10 resources are being modified in a single plan"
+    threshold: 10
+    severity: high
+
+  - name: require-standard-tags
+    description: "All resources must have Environment, Team, and CostCenter tags"
+    required_tags: ["Environment", "Team", "CostCenter"]
+    severity: medium
+
+  - name: no-hardcoded-amis
+    description: "AMI IDs should come from data sources, not hardcoded strings"
+    severity: low
+
+# Resources that should always receive extra scrutiny
+# Supports glob patterns
+sensitive_resources:
+  - aws_iam_*
+  - aws_security_group*
+  - aws_kms_key
+  - aws_s3_bucket_policy
+  - aws_rds_cluster
+  - aws_db_instance
+  - aws_route53_zone
+  - google_project_iam_*
+  - azurerm_key_vault*
+
+# Files to ignore in the diff (glob patterns)
+ignore:
+  - "*.auto.tfvars"
+  - "backend.tf"
+  - ".terraform.lock.hcl"

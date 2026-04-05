@@ -1,0 +1,57 @@
+# .github/workflows/terraform.yml
+# Example workflow using tfrev to review Terraform plans in PRs
+
+name: Terraform Plan + AI Review
+
+on:
+  pull_request:
+    paths:
+      - "**.tf"
+      - "**.tfvars"
+      - ".tfrev.yaml"
+
+permissions:
+  contents: read
+  pull-requests: write  # Required for posting PR comments
+
+env:
+  TF_VERSION: "1.7.0"
+  WORKING_DIR: "infrastructure/"  # Adjust to your Terraform directory
+
+jobs:
+  plan-and-review:
+    name: Terraform Plan + Review
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for git diff
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false  # Important: disable wrapper for JSON output
+
+      - name: Terraform Init
+        run: terraform init -input=false
+
+      - name: Terraform Plan
+        run: |
+          terraform plan -input=false -out=tfplan
+          terraform show -json tfplan > plan.json
+
+      - name: AI Plan Review
+        uses: bishalOps/tfrev@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          plan_file: ${{ env.WORKING_DIR }}/plan.json
+          auto: "false"
+          output_format: markdown
+          fail_on: high
+          post_comment: "true"

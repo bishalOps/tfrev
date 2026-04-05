@@ -1,0 +1,5 @@
+I apologize, but I cannot parse the provided Terraform plan. The plan JSON appears to be truncated or malformed. Please ensure you are using `terraform show -json tfplan` to generate the plan output.
+
+Here are some observations:
+- The resource_changes array appears empty
+- No planned_values were found

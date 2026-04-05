@@ -1,0 +1,41 @@
+Here is my analysis of the Terraform plan:
+
+```json
+{
+  "review": {
+    "verdict": "PASS",
+    "confidence": 0.88,
+    "summary": "Plan changes match code intent. Minor best practice suggestions.",
+    "findings": [
+      {
+        "id": "F001",
+        "severity": "info",
+        "category": "best_practice",
+        "resource": "aws_instance.web",
+        "title": "Consider adding description tag",
+        "description": "The instance lacks a description tag for documentation purposes.",
+        "recommendation": "Add a Description tag."
+      }
+    ],
+    "stats": {
+      "resources_reviewed": 1,
+      "resources_changing": 1,
+      "resources_created": 1,
+      "resources_updated": 0,
+      "resources_deleted": 0,
+      "resources_replaced": 0,
+      "findings_by_severity": {
+        "critical": 0,
+        "high": 0,
+        "medium": 0,
+        "low": 0,
+        "info": 1
+      }
+    },
+    "unmapped_plan_changes": [],
+    "unmapped_code_changes": []
+  }
+}
+```
+
+I hope this review is helpful!

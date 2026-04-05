@@ -1,0 +1,126 @@
+// Jenkinsfile for tfrev — Terraform Plan AI Review
+//
+// Requirements:
+//   - Terraform installed on the agent (or use a Docker agent)
+//   - Python 3.9+ on the agent
+//   - ANTHROPIC_API_KEY stored as a Jenkins credential (Secret text)
+//   - Git configured for the workspace
+//
+// Usage:
+//   1. Copy this Jenkinsfile into your Terraform repo
+//   2. Create a multibranch pipeline pointing to your repo
+//   3. Add ANTHROPIC_API_KEY as a credential in Jenkins
+//   4. Adjust TERRAFORM_DIR and other parameters below
+
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'TERRAFORM_DIR', defaultValue: '.', description: 'Directory containing Terraform files')
+        choice(name: 'TFREV_FAIL_ON', choices: ['high', 'critical', 'medium', 'low', 'info'], description: 'Minimum severity to fail the build')
+        string(name: 'TFREV_MODEL', defaultValue: 'claude-sonnet-4-6', description: 'Claude model to use')
+    }
+
+    environment {
+        TF_IN_AUTOMATION = 'true'
+        TF_INPUT         = '0'
+        PATH             = "${env.HOME}/.local/bin:${env.WORKSPACE}/.venv/bin:${env.PATH}"
+        UV_LINK_MODE     = 'copy'
+    }
+
+    stages {
+
+        stage('Install tfrev') {
+            steps {
+                sh 'curl -LsSf https://astral.sh/uv/install.sh | sh'
+                sh 'uv venv --clear .venv'
+                sh 'uv pip install tfrev'
+            }
+        }
+
+        stage('Terraform Init') {
+            steps {
+                dir("${params.TERRAFORM_DIR}") {
+                    sh 'terraform init -input=false'
+                }
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                dir("${params.TERRAFORM_DIR}") {
+                    sh '''
+                        terraform plan -input=false -out=tfplan
+                        terraform show -json tfplan > plan.json
+                    '''
+                }
+            }
+        }
+
+        stage('AI Plan Review') {
+            steps {
+                withCredentials([string(credentialsId: 'ANTHROPIC_API_KEY', variable: 'ANTHROPIC_API_KEY')]) {
+                    dir("${params.TERRAFORM_DIR}") {
+                        script {
+                            // tfrev auto-generates the diff via git
+                            // CHANGE_TARGET is auto-detected as the base ref in multibranch pipelines
+                            def reviewStatus = sh(
+                                script: """
+                                    tfrev review \\
+                                        --plan plan.json \\
+                                        --output json \\
+                                        --model ${params.TFREV_MODEL} \\
+                                        --fail-on ${params.TFREV_FAIL_ON} \\
+                                        > review.json 2>review-log.txt
+
+                                """,
+                                returnStatus: true
+                            )
+
+                            // Also generate markdown for archival
+                            sh """
+                                tfrev review \\
+                                    --plan plan.json \\
+                                    --output markdown \\
+                                    > review.md 2>/dev/null || true
+                            """
+
+                            // Archive the review
+                            archiveArtifacts artifacts: 'review.json, review.md', allowEmptyArchive: true
+
+                            // Parse and display verdict
+                            if (fileExists('review.json')) {
+                                def reviewJson = readJSON file: 'review.json'
+                                def verdict = reviewJson.review.verdict
+                                def findingsCount = reviewJson.review.findings.size()
+
+                                echo "═══════════════════════════════════════"
+                                echo "  tfrev Verdict: ${verdict}"
+                                echo "  Findings: ${findingsCount}"
+                                echo "═══════════════════════════════════════"
+
+                                // Set build description
+                                currentBuild.description = "tfrev: ${verdict} (${findingsCount} findings)"
+                            }
+
+                            if (reviewStatus != 0) {
+                                error("tfrev review FAILED — findings at or above '${params.TFREV_FAIL_ON}' severity detected. Check review.md for details.")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            dir("${params.TERRAFORM_DIR}") {
+                archiveArtifacts artifacts: 'plan.json, review.json, review.md', allowEmptyArchive: true
+            }
+        }
+        failure {
+            echo 'Terraform plan review failed. Check the review artifacts for details.'
+        }
+    }
+}

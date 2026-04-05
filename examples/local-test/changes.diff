@@ -1,0 +1,69 @@
+diff --git a/main.tf b/main.tf
+index a1b2c3d..e4f5g6h 100644
+--- a/main.tf
++++ b/main.tf
+@@ -1,6 +1,8 @@
+ terraform {
+   required_providers {
+     null = {
+       source  = "hashicorp/null"
+       version = "~> 3.0"
+     }
+   }
+ }
+
+ # Simulates a web application EC2 instance
+ resource "null_resource" "web_server" {
+   triggers = {
+     instance_type = var.instance_type
+     ami_id        = var.ami_id
+     environment   = var.environment
+   }
+ }
+
+-# Simulates a security group
++# Simulates a security group — SSH opened to the world (intentional finding for review)
+ resource "null_resource" "web_sg" {
+   triggers = {
+     name             = "${var.environment}-web-sg"
+-    ingress_ssh_cidr = "10.0.0.0/8"
++    ingress_ssh_cidr = "0.0.0.0/0"
+     ingress_http     = "0.0.0.0/0"
+     ingress_https    = "0.0.0.0/0"
+     egress           = "0.0.0.0/0"
+   }
+ }
+
+ # Simulates an RDS database instance
+ resource "null_resource" "app_db" {
+   triggers = {
+     identifier        = "${var.environment}-app-db"
+-    instance_class    = "db.t3.small"
++    instance_class    = var.db_instance_class
+     engine            = "postgres"
+     engine_version    = "15.3"
++    publicly_accessible = "true"
+     deletion_protection = "false"
+   }
+ }
+
+ # Simulates an S3 bucket for app assets
+ resource "null_resource" "app_assets_bucket" {
+   triggers = {
+     bucket = "${var.environment}-app-assets"
+-    acl    = "private"
++    acl    = "public-read"
+   }
+ }
+diff --git a/variables.tf b/variables.tf
+index 1234567..abcdefg 100644
+--- a/variables.tf
++++ b/variables.tf
+@@ -14,7 +14,7 @@ variable "ami_id" {
+
+ variable "db_instance_class" {
+   description = "RDS instance class"
+   type        = string
+-  default     = "db.t3.small"
++  default     = "db.t3.medium"
+ }

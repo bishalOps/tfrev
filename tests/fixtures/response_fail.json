@@ -1,0 +1,69 @@
+{
+  "review": {
+    "verdict": "FAIL",
+    "confidence": 0.92,
+    "summary": "The plan contains a critical security regression: SSH access widened to 0.0.0.0/0.",
+    "findings": [
+      {
+        "id": "F001",
+        "severity": "critical",
+        "category": "security",
+        "resource": "aws_security_group.web_sg",
+        "title": "SSH ingress opened to the entire internet",
+        "description": "The code diff changes ingress_cidr from 10.0.0.0/8 to 0.0.0.0/0, exposing SSH to all IPs.",
+        "code_reference": {
+          "file": "main.tf",
+          "lines": "12-15"
+        },
+        "plan_reference": {
+          "action": "update",
+          "address": "aws_security_group.web_sg"
+        },
+        "recommendation": "Revert ingress_cidr to a restricted CIDR range."
+      },
+      {
+        "id": "F002",
+        "severity": "medium",
+        "category": "best_practice",
+        "resource": "aws_instance.web",
+        "title": "Instance lacks lifecycle prevent_destroy",
+        "description": "The EC2 instance does not have lifecycle prevent_destroy enabled.",
+        "code_reference": {
+          "file": "main.tf",
+          "lines": "1-10"
+        },
+        "plan_reference": {
+          "action": "create",
+          "address": "aws_instance.web"
+        },
+        "recommendation": "Add lifecycle { prevent_destroy = true } for production instances."
+      },
+      {
+        "id": "F003",
+        "severity": "low",
+        "category": "best_practice",
+        "resource": "general",
+        "title": "No tags on security group",
+        "description": "The security group resource lacks standard tags.",
+        "recommendation": "Add Environment and Team tags."
+      }
+    ],
+    "stats": {
+      "resources_reviewed": 3,
+      "resources_changing": 2,
+      "resources_created": 1,
+      "resources_updated": 1,
+      "resources_deleted": 0,
+      "resources_replaced": 0,
+      "findings_by_severity": {
+        "critical": 1,
+        "high": 0,
+        "medium": 1,
+        "low": 1,
+        "info": 0
+      }
+    },
+    "unmapped_plan_changes": ["aws_route53_record.drift"],
+    "unmapped_code_changes": ["outputs.tf"]
+  }
+}

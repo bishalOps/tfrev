@@ -1,0 +1,31 @@
+{
+  "review": {
+    "verdict": "FAIL",
+    "confidence": 0.85,
+    "summary": "One medium-severity finding.",
+    "findings": [
+      {
+        "id": "F001",
+        "severity": "medium",
+        "category": "best_practice",
+        "resource": "aws_instance.web",
+        "title": "Instance lacks lifecycle prevent_destroy",
+        "description": "The EC2 instance does not have lifecycle prevent_destroy enabled.",
+        "code_reference": {"file": "main.tf", "lines": "1-10"},
+        "plan_reference": {"action": "create", "address": "aws_instance.web"},
+        "recommendation": "Add lifecycle { prevent_destroy = true } for production instances."
+      }
+    ],
+    "stats": {
+      "resources_reviewed": 1,
+      "resources_changing": 1,
+      "resources_created": 1,
+      "resources_updated": 0,
+      "resources_deleted": 0,
+      "resources_replaced": 0,
+      "findings_by_severity": {"critical": 0, "high": 0, "medium": 1, "low": 0, "info": 0}
+    },
+    "unmapped_plan_changes": [],
+    "unmapped_code_changes": []
+  }
+}

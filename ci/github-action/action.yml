@@ -1,0 +1,161 @@
+name: "tfrev - Terraform Plan Review"
+description: "AI-powered Terraform plan reviewer using Claude. Verifies plan matches code intent."
+author: "Bishal Paudel"
+
+branding:
+  icon: "shield"
+  color: "orange"
+
+inputs:
+  anthropic_api_key:
+    description: "Anthropic API key for Claude"
+    required: true
+  plan_file:
+    description: "Path to Terraform plan JSON file (output of terraform show -json)"
+    required: false
+    default: ""
+  auto:
+    description: "Auto-detect plan file (set to 'true')"
+    required: false
+    default: "true"
+  base_ref:
+    description: "Git ref to diff against (SHA, tag, or branch). Defaults to auto-detection from CI env."
+    required: false
+    default: ""
+  output_format:
+    description: "Output format: table, json, or markdown"
+    required: false
+    default: "markdown"
+  model:
+    description: "Claude model to use"
+    required: false
+    default: "claude-sonnet-4-6"
+  fail_on:
+    description: "Fail the action if any finding >= this severity (info, low, medium, high, critical)"
+    required: false
+    default: "high"
+  severity_threshold:
+    description: "Minimum severity to include in output"
+    required: false
+    default: "low"
+  post_comment:
+    description: "Post review as PR comment (true/false)"
+    required: false
+    default: "true"
+  config_file:
+    description: "Path to .tfrev.yaml config file"
+    required: false
+    default: ""
+  tfrev_version:
+    description: "Version of tfrev to install"
+    required: false
+    default: "latest"
+
+outputs:
+  verdict:
+    description: "Review verdict: PASS, WARN, or FAIL"
+    value: ${{ steps.review.outputs.verdict }}
+  review_json:
+    description: "Full review result as JSON"
+    value: ${{ steps.review.outputs.review_json }}
+  findings_count:
+    description: "Total number of findings"
+    value: ${{ steps.review.outputs.findings_count }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install tfrev
+      shell: bash
+      run: |
+        if [ "${{ inputs.tfrev_version }}" = "latest" ]; then
+          pip install tfrev
+        else
+          pip install "tfrev==${{ inputs.tfrev_version }}"
+        fi
+
+    - name: Prepare inputs
+      id: prepare
+      shell: bash
+      run: |
+        ARGS=""
+
+        if [ "${{ inputs.auto }}" = "true" ]; then
+          ARGS="--auto"
+        else
+          if [ -n "${{ inputs.plan_file }}" ]; then
+            ARGS="$ARGS --plan ${{ inputs.plan_file }}"
+          fi
+        fi
+
+        if [ -n "${{ inputs.base_ref }}" ]; then
+          ARGS="$ARGS --base-ref ${{ inputs.base_ref }}"
+        fi
+
+        ARGS="$ARGS --output ${{ inputs.output_format }}"
+        ARGS="$ARGS --model ${{ inputs.model }}"
+        ARGS="$ARGS --fail-on ${{ inputs.fail_on }}"
+        ARGS="$ARGS --severity-threshold ${{ inputs.severity_threshold }}"
+
+        if [ -n "${{ inputs.config_file }}" ]; then
+          ARGS="$ARGS --config ${{ inputs.config_file }}"
+        fi
+
+        echo "args=$ARGS" >> $GITHUB_OUTPUT
+
+    - name: Run tfrev review
+      id: review
+      shell: bash
+      env:
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+      run: |
+        set +e
+
+        # Single API call — always capture JSON for structured data
+        REVIEW_JSON=$(tfrev review ${{ steps.prepare.outputs.args }} --output json 2>/tmp/tfrev-stderr.txt)
+        EXIT_CODE=$?
+
+        # Extract verdict and findings count
+        VERDICT=$(echo "$REVIEW_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['review']['verdict'])" 2>/dev/null || echo "UNKNOWN")
+        FINDINGS_COUNT=$(echo "$REVIEW_JSON" | python3 -c "import sys,json; print(len(json.load(sys.stdin)['review']['findings']))" 2>/dev/null || echo "0")
+
+        echo "verdict=$VERDICT" >> $GITHUB_OUTPUT
+        echo "findings_count=$FINDINGS_COUNT" >> $GITHUB_OUTPUT
+
+        # Save review JSON (escape for output)
+        echo "review_json<<TFREV_EOF" >> $GITHUB_OUTPUT
+        echo "$REVIEW_JSON" >> $GITHUB_OUTPUT
+        echo "TFREV_EOF" >> $GITHUB_OUTPUT
+
+        # Generate markdown from JSON locally (no second API call)
+        python3 -c "
+        import sys, json
+        from tfrev.output import review_result_from_json, format_markdown
+        from tfrev.config import TfrevConfig
+        raw = sys.stdin.read()
+        result = review_result_from_json(raw)
+        config = TfrevConfig(
+            severity_threshold='${{ inputs.severity_threshold }}',
+            fail_on='${{ inputs.fail_on }}',
+        )
+        print(format_markdown(result, config))
+        " <<< "$REVIEW_JSON" > /tmp/tfrev-review.md 2>/dev/null
+
+        exit $EXIT_CODE
+
+    - name: Post PR comment
+      if: inputs.post_comment == 'true' && github.event_name == 'pull_request'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        # Delete previous tfrev comments
+        COMMENTS=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments --jq '.[] | select(.body | contains("Terraform Plan Review")) | .id')
+        for COMMENT_ID in $COMMENTS; do
+          gh api -X DELETE repos/${{ github.repository }}/issues/comments/$COMMENT_ID 2>/dev/null || true
+        done
+
+        # Post new comment
+        gh pr comment ${{ github.event.pull_request.number }} \
+          --body-file /tmp/tfrev-review.md \
+          --repo ${{ github.repository }}
