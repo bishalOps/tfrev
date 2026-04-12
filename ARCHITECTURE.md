@@ -84,7 +84,7 @@ For each resource_change:
 ```
 
 **Why JSON over human-readable plan:**
-The JSON format is deterministic, parseable, and includes metadata (like `after_unknown`) that the human-readable plan omits. It also avoids the fragile regex parsing needed for the pretty-printed output. We still accept the human-readable plan as a fallback via `--plan-text` for environments where JSON output is unavailable.
+The JSON format is deterministic, parseable, and includes metadata (like `after_unknown`) that the human-readable plan omits. It also avoids the fragile regex parsing needed for the pretty-printed output.
 
 #### 3.1.2 Git Diff Parser (`tfrev/diff_parser.py`)
 
@@ -243,9 +243,6 @@ tfrev review --plan plan.json
 # Diff against a specific ref (e.g. last deployed SHA or tag)
 tfrev review --plan plan.json --base-ref abc1234
 
-# With human-readable plan (fallback)
-tfrev review --plan-text plan.txt
-
 # Auto-detect plan file (runs in git repo with existing tfplan)
 tfrev review --auto
 
@@ -393,7 +390,7 @@ tfrev/
 ## 9. Roadmap
 
 ### v1.0.0 (current)
-- CLI with `--plan`, `--plan-text`, `--auto`, `--base-ref`
+- CLI with `--plan`, `--auto`, `--base-ref`
 - Auto-generated git diff (no manual `--diff` required)
 - Claude API integration with production prompt
 - JSON, Markdown, and Table output

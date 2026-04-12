@@ -139,16 +139,6 @@ class TestReviewCommand:
         assert result.exit_code == 0
 
     @patch("tfrev.cli.ReviewClient")
-    def test_plan_text_mode(self, mock_client_cls, runner, pass_api_response, mock_git_diff):
-        mock_client_cls.return_value.review.return_value = pass_api_response
-        plan_text = FIXTURES_DIR.parent.parent / "examples" / "local-test" / "main.tf"
-        if not plan_text.exists():
-            pytest.skip("local-test example not available")
-
-        result = runner.invoke(main, ["review", "--plan-text", str(plan_text), "--quiet"])
-        assert result.exit_code == 0
-
-    @patch("tfrev.cli.ReviewClient")
     def test_config_override(self, mock_client_cls, runner, pass_api_response, mock_git_diff):
         mock_client_cls.return_value.review.return_value = pass_api_response
         plan_file = str(FIXTURES_DIR / "plan_minimal.json")

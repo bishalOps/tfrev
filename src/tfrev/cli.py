@@ -21,12 +21,6 @@ from tfrev.prompt import build_system_prompt, build_user_prompt, estimate_tokens
 from tfrev.response_parser import parse_response
 from tfrev.tf_discovery import discover_context_files, infer_root_dir
 
-# Default context window limits by model family
-_MODEL_CONTEXT_LIMITS: dict[str, int] = {
-    "claude-sonnet-4-6": 200_000,
-    "claude-opus-4-6": 200_000,
-    "claude-haiku-4-5-20251001": 200_000,
-}
 _DEFAULT_CONTEXT_LIMIT = 200_000
 
 
@@ -74,12 +68,6 @@ def main():
     help="Path to plan JSON file (terraform show -json)",
 )
 @click.option(
-    "--plan-text",
-    "plan_text_path",
-    type=click.Path(exists=True),
-    help="Path to human-readable plan output (best-effort; JSON via --plan is recommended)",
-)
-@click.option(
     "--auto", "auto_mode", is_flag=True, help="Auto-detect plan file from current directory"
 )
 @click.option(
@@ -125,7 +113,6 @@ def main():
 @click.option("--quiet", is_flag=True, help="Suppress progress messages")
 def review(
     plan_path,
-    plan_text_path,
     auto_mode,
     base_ref,
     config_path,
@@ -160,21 +147,36 @@ def review(
         if not quiet:
             click.echo(f"Loading plan: {plan_path}", err=True)
         plan = load_plan_file(plan_path)
-    elif plan_text_path:
-        if not quiet:
-            click.echo(f"Loading plan (text mode): {plan_text_path}", err=True)
-        plan_text = Path(plan_text_path).read_text()
-        plan = PlanSummary(
-            resource_changes=[],
-            terraform_version="unknown",
-            format_version="text",
-            raw_text=plan_text,
-        )
     else:
-        click.echo("Error: Provide --plan, --plan-text, or --auto", err=True)
+        click.echo("Error: Provide --plan or --auto", err=True)
         sys.exit(2)
 
     # --- Generate diff ---
+    if not base_ref and not quiet:
+        default_branch = _detect_default_branch()
+        click.echo(
+            f"No --base-ref provided. --base-ref is the previous commit, branch, or tag "
+            "to compare your current Terraform code against (e.g. the last known-good state).",
+            err=True,
+        )
+        click.echo(
+            f"Will diff against '{default_branch}' — if that yields no Terraform changes, "
+            "the entire current state of Terraform files will be reviewed instead.",
+            err=True,
+        )
+        answer = click.prompt(
+            "Continue?",
+            type=str,
+            default="no",
+            err=True,
+        )
+        if answer.lower() not in ("yes", "y"):
+            click.echo(
+                "Aborting. Re-run with --base-ref <branch/sha/tag> to diff against a specific ref.",
+                err=True,
+            )
+            sys.exit(2)
+
     diff = _generate_diff(base_ref, quiet)
 
     # --- Apply ignore patterns ---
@@ -221,8 +223,7 @@ def review(
         click.echo(f"Estimated input tokens: ~{total_tokens:,}", err=True)
 
     # --- Context window check ---
-    context_limit = _MODEL_CONTEXT_LIMITS.get(config.model, _DEFAULT_CONTEXT_LIMIT)
-    available = context_limit - config.max_tokens - 1000  # reserve for response + overhead
+    available = _DEFAULT_CONTEXT_LIMIT - config.max_tokens - 1000  # reserve for response + overhead
 
     if total_tokens > available:
         if not quiet:
@@ -237,11 +238,19 @@ def review(
 
         if total_tokens > available:
             click.echo(
-                "Error: Plan + diff alone exceed the model context window. "
-                "Consider splitting into smaller reviews or using a model with a larger context.",
+                f"Warning: Estimated input (~{total_tokens:,} tokens) still exceeds "
+                f"available context ({available:,} tokens) even without context files.",
                 err=True,
             )
-            sys.exit(2)
+            answer = click.prompt(
+                "Do you want to continue anyway?",
+                type=str,
+                default="no",
+                err=True,
+            )
+            if answer.lower() not in ("yes", "y"):
+                click.echo("Aborting.", err=True)
+                sys.exit(2)
 
     if not quiet:
         click.echo("Sending to Claude for review...", err=True)
