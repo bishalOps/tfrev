@@ -19,11 +19,17 @@ class PolicyRule:
     required_tags: list[str] | None = None
 
 
+_VALID_PROVIDERS = {"anthropic", "aws-bedrock"}
+
+
 @dataclass
 class TfrevConfig:
     """tfrev configuration."""
 
-    # Claude settings
+    # Provider: "anthropic" (direct API) or "aws-bedrock" (via AWS Bedrock)
+    provider: str = "anthropic"
+
+    # Model and token settings
     model: str = "claude-sonnet-4-6"
     max_tokens: int = 4096
 
@@ -84,6 +90,12 @@ def load_config(config_path: str | Path | None = None) -> TfrevConfig:
         return config
 
     # Apply overrides
+    if "provider" in raw:
+        provider = str(raw["provider"]).lower()
+        if provider not in _VALID_PROVIDERS:
+            valid = ", ".join(sorted(_VALID_PROVIDERS))
+            raise ValueError(f"Invalid provider '{provider}'. Must be one of: {valid}")
+        config.provider = provider
     if "model" in raw:
         config.model = raw["model"]
     if "max_tokens" in raw:

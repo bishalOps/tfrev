@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+- AWS Bedrock provider support — set `provider: aws-bedrock` in `.tfrev.yaml` to route reviews through AWS Bedrock instead of the Anthropic API directly; region and credentials come from the standard AWS credential chain
+- `tfrev[aws]` optional install extra that pulls in `boto3` (required for Bedrock)
+- Provider-aware error messages for authentication and permission failures on both providers
+- `botocore` exception handling for AWS credential errors that escape the SDK wrapper
+
+### Changed
+- CLI progress messages now show the active provider (e.g. "Sending to Claude via AWS Bedrock for review...")
+- Summary line now shows `Provider:` alongside `Model:`
+
 ## [2.0.0] - 2026-04-17
 
 ### Migration from 1.0.x

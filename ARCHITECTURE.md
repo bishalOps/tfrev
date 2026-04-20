@@ -47,10 +47,13 @@ Terraform plans can be complex and easy to misread. A developer might change a t
 └──────────────────────────────────────────────────────────────┘
                 │
                 ▼
-┌──────────────────────────────────────────────────────────────┐
-│                   Anthropic Claude API                        │
-│              (claude-sonnet-4-6 default)                    │
-└──────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│             Claude API  (provider-selected)                    │
+│  ┌─────────────────────────┐  ┌────────────────────────────┐  │
+│  │  Anthropic API (default) │  │     AWS Bedrock             │  │
+│  │  ANTHROPIC_API_KEY       │  │  boto3 + IAM credentials   │  │
+│  └─────────────────────────┘  └────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -104,7 +107,8 @@ The parser preserves file-level grouping so Claude can reason about which file d
 
 ```yaml
 # .tfrev.yaml
-model: claude-sonnet-4-6         # Claude model to use
+provider: anthropic                # "anthropic" (default) or "aws-bedrock"
+model: claude-sonnet-4-6         # Claude model (use Bedrock model ID for aws-bedrock)
 max_tokens: 4096                   # Max response tokens
 severity_threshold: medium         # Minimum severity to report (low/medium/high/critical)
 fail_on: high                      # Exit code 1 if any finding >= this severity
@@ -157,21 +161,33 @@ The prompt builder also handles **context window management**:
 
 #### 3.2.2 Claude API Client (`tfrev/client.py`)
 
-Thin wrapper around the Anthropic Python SDK:
+Thin wrapper around the Anthropic Python SDK. The active provider is selected at instantiation time based on `config.provider`:
 
 ```python
+# provider: anthropic (default)
 client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-response = client.messages.create(
-    model=config.model,
-    max_tokens=config.max_tokens,
-    system=system_prompt,
-    messages=[{"role": "user", "content": user_prompt}]
-)
+
+# provider: aws-bedrock
+client = anthropic.AnthropicBedrock(aws_region=config.aws_region or "us-east-1")
+```
+
+Both clients share the same `messages.create()` interface, so the `review()` method is identical regardless of provider.
+
+**Provider selection** is driven by `.tfrev.yaml`:
+
+```yaml
+provider: anthropic      # direct Anthropic API (default)
+# — or —
+provider: aws-bedrock    # via AWS Bedrock (requires pip install 'tfrev[aws]')
+aws_region: us-east-1
+model: anthropic.claude-sonnet-4-5-20250514-v1:0
 ```
 
 **Error handling:**
 - Rate limit retries with exponential backoff (3 attempts)
-- API key validation on startup
+- Credential validation on startup (Anthropic API key or AWS credentials)
+- Provider-specific error messages for auth/permission failures
+- `botocore` exception passthrough handling for AWS credential errors
 - Token count estimation before sending (warn if approaching limits)
 - Timeout after 120 seconds
 
@@ -251,6 +267,7 @@ tfrev review --plan plan.json --output markdown > comment.md
 
 # Override config
 tfrev review --plan plan.json \
+  --provider anthropic \
   --model claude-sonnet-4-6 \
   --fail-on critical \
   --severity-threshold low
@@ -284,9 +301,10 @@ This makes the simplest CI integration a single line: `tfrev review --auto`
 | Component | Technology | Rationale |
 |-----------|-----------|-----------|
 | Language | **Python 3.9+** | Universal CI availability, easy pip install, largest contributor pool |
-| API Client | **anthropic** (official SDK) | Maintained by Anthropic, handles auth/retries |
+| API Client | **anthropic** (official SDK) | Single SDK covers both Anthropic API and AWS Bedrock via `AnthropicBedrock` |
+| AWS Bedrock | **boto3** (optional extra) | Standard AWS SDK; required only when `provider: aws-bedrock` is configured |
 | CLI Framework | **click** | Industry standard for Python CLIs |
-| Packaging | **pip / PyPI** | `pip install tfrev` — works everywhere |
+| Packaging | **pip / PyPI** | `pip install tfrev` or `pip install 'tfrev[aws]'` for Bedrock support |
 | Alternative Install | **Docker** | `docker run ghcr.io/org/tfrev` for hermetic environments |
 | Testing | **pytest** | Standard Python testing |
 | CI/CD Config | **YAML** | GitHub Actions + GitLab CI native format |
@@ -307,9 +325,10 @@ While Go is Terraform's native language, Python was chosen because:
 
 ### 7.1 API Key Management
 
-- API key is read exclusively from `ANTHROPIC_API_KEY` environment variable
-- Never logged, never written to disk, never included in output
-- In CI: stored as a pipeline secret/variable
+- **Anthropic provider:** API key is read exclusively from `ANTHROPIC_API_KEY` environment variable
+- **AWS Bedrock provider:** region and credentials are sourced entirely via the standard AWS credential chain (environment variables, `~/.aws/credentials` / `~/.aws/config`, or IAM instance role) — nothing extra is configured in tfrev
+- Credentials are never logged, never written to disk, never included in output
+- In CI: store as pipeline secrets/variables or use OIDC (Bedrock)
 
 ### 7.2 Data Sensitivity
 
@@ -404,7 +423,7 @@ tfrev/
 - Spacelift integration (custom action)
 - SARIF output for GitHub Code Scanning
 - Review history and trend tracking
-- Multi-model support (configurable LLM backend)
+- Multi-model support (configurable LLM backend) — AWS Bedrock added in v2.1.0
 
 ---
 

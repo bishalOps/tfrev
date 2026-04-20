@@ -6,6 +6,8 @@ tfrev uses Claude AI to review your `terraform plan` output against your code ch
 
 ## Quick Start
 
+### Anthropic API (default)
+
 ```bash
 # Install
 pip install tfrev
@@ -18,6 +20,30 @@ terraform plan -out=tfplan
 terraform show -json tfplan > plan.json
 
 tfrev review --plan plan.json
+```
+
+### AWS Bedrock
+
+```bash
+# Install with Bedrock support
+pip install 'tfrev[aws]'
+
+# Configure AWS credentials (env vars, ~/.aws/credentials, or IAM role)
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
+export AWS_DEFAULT_REGION=us-east-1
+
+# Via .tfrev.yaml
+cat >> .tfrev.yaml <<'EOF'
+provider: aws-bedrock
+model: anthropic.claude-sonnet-4-5-20250514-v1:0
+EOF
+tfrev review --plan plan.json
+
+# Or entirely via CLI flags
+tfrev review --plan plan.json \
+  --provider aws-bedrock \
+  --model anthropic.claude-sonnet-4-5-20250514-v1:0
 ```
 
 Or use auto-detection:
@@ -47,12 +73,24 @@ tfrev review --plan plan.json --base-ref abc1234
 ### GitHub Actions
 
 ```yaml
+# Anthropic API
 - name: AI Plan Review
   uses: bishalOps/tfrev@v1
   with:
     anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
     post_comment: "true"
     fail_on: high
+```
+
+```yaml
+# AWS Bedrock (using OIDC or IAM credentials already configured in the job)
+- name: AI Plan Review (Bedrock)
+  run: |
+    pip install 'tfrev[aws]'
+    tfrev review --auto --output markdown --fail-on high --quiet
+  env:
+    AWS_DEFAULT_REGION: us-east-1
+    # provider: aws-bedrock must be set in .tfrev.yaml
 ```
 
 ### GitLab CI
@@ -69,9 +107,16 @@ Copy `ci/jenkins/Jenkinsfile` into your repo and add `ANTHROPIC_API_KEY` as a cr
 ### Any CI/CD
 
 ```bash
+# Anthropic API
 pip install tfrev
 export ANTHROPIC_API_KEY=$YOUR_SECRET
 tfrev review --auto --output markdown --fail-on high --quiet
+
+# AWS Bedrock (credentials via env or IAM role)
+pip install 'tfrev[aws]'
+tfrev review --auto --provider aws-bedrock \
+  --model anthropic.claude-sonnet-4-5-20250514-v1:0 \
+  --output markdown --fail-on high --quiet
 ```
 
 > **Note:** Always pass `--quiet` in CI/CD. Without it, tfrev prompts for
@@ -84,6 +129,9 @@ tfrev review --auto --output markdown --fail-on high --quiet
 Create a `.tfrev.yaml` in your project root:
 
 ```yaml
+# Provider: "anthropic" (default) or "aws-bedrock"
+provider: anthropic
+
 model: claude-sonnet-4-6
 fail_on: high
 policies:
@@ -94,6 +142,13 @@ sensitive_resources:
   - aws_iam_*            # AWS
   - google_project_iam_* # GCP
   - azurerm_key_vault*   # Azure
+```
+
+For AWS Bedrock, set `provider: aws-bedrock`, install `tfrev[aws]`, and use a Bedrock model ID. Region and credentials are read from the standard AWS credential chain (`AWS_DEFAULT_REGION`, `~/.aws/config`, IAM role, etc.):
+
+```yaml
+provider: aws-bedrock
+model: anthropic.claude-sonnet-4-5-20250514-v1:0
 ```
 
 See `.tfrev.yaml.example` for all options.
@@ -160,7 +215,9 @@ tfrev review --plan plan.json --output json      # Machine consumption
 
 ## Cost
 
-Each review is a single Claude API call. Typical cost is $0.01–$0.10 per review depending on plan size and model. If the combined input exceeds the model's context window, tfrev drops context files to fit — it never splits into multiple calls.
+Each review is a single API call. Typical cost is $0.01–$0.10 per review depending on plan size and model. If the combined input exceeds the model's context window, tfrev drops context files to fit — it never splits into multiple calls.
+
+When using AWS Bedrock, pricing is determined by your AWS Bedrock on-demand or provisioned throughput rates rather than the Anthropic API.
 
 ## License
 

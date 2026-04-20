@@ -54,6 +54,7 @@ class TestValidateSeverity:
 class TestLoadConfig:
     def test_defaults(self):
         config = load_config(None)
+        assert config.provider == "anthropic"
         assert config.model == "claude-sonnet-4-6"
         assert config.max_tokens == 4096
         assert config.fail_on == "high"
@@ -61,6 +62,22 @@ class TestLoadConfig:
         assert config.policies == []
         assert config.sensitive_resources == []
         assert config.ignore == []
+
+    def test_provider_aws_bedrock(self, tmp_path):
+        config_file = tmp_path / ".tfrev.yaml"
+        config_file.write_text(
+            "provider: aws-bedrock\n"
+            "model: anthropic.claude-sonnet-4-5-20250514-v1:0\n"
+        )
+        config = load_config(config_file)
+        assert config.provider == "aws-bedrock"
+        assert config.model == "anthropic.claude-sonnet-4-5-20250514-v1:0"
+
+    def test_invalid_provider_rejected(self, tmp_path):
+        config_file = tmp_path / ".tfrev.yaml"
+        config_file.write_text("provider: openai\n")
+        with pytest.raises(ValueError, match="Invalid provider"):
+            load_config(config_file)
 
     def test_full_config(self, full_config_path):
         config = load_config(full_config_path)

@@ -1,6 +1,19 @@
 # .tfrev.yaml — tfrev configuration
 # Place this file in your Terraform project root.
 
+# AI provider: "anthropic" (default) or "aws-bedrock"
+#
+# anthropic  — calls the Anthropic API directly.
+#              Requires: ANTHROPIC_API_KEY environment variable.
+#
+# aws-bedrock — calls Claude through AWS Bedrock.
+#               Requires: boto3 installed (`pip install 'tfrev[aws]'`) and
+#               standard AWS credentials (env vars, ~/.aws/credentials, or IAM role).
+#               The model value must be a Bedrock model ID, e.g.:
+#                 anthropic.claude-sonnet-4-5-20250514-v1:0
+#
+provider: anthropic
+
 # Claude model to use for reviews
 model: claude-sonnet-4-6
 

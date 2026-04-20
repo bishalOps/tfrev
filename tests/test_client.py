@@ -38,7 +38,7 @@ class TestReviewClientInit:
     def test_initializes_with_api_key(self, config, monkeypatch):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
         client = ReviewClient(config)
-        assert client._api_key == "sk-ant-test"
+        assert isinstance(client._client, anthropic.Anthropic)
 
 
 class TestReviewClientReview:

@@ -177,6 +177,43 @@ class TestReviewCommand:
         assert diff_calls, "no git-diff call was made"
         assert any("abc1234...HEAD" in call.args[0] for call in diff_calls)
 
+    @patch("tfrev.cli.ReviewClient")
+    def test_provider_flag_anthropic(self, mock_client_cls, runner, pass_api_response, mock_git_diff):
+        """--provider anthropic sets config.provider to 'anthropic'."""
+        mock_client_cls.return_value.review.return_value = pass_api_response
+        plan_file = str(FIXTURES_DIR / "plan_minimal.json")
+
+        result = runner.invoke(
+            main, ["review", "--plan", plan_file, "--provider", "anthropic", "--quiet"]
+        )
+        assert result.exit_code == 0
+        config_arg = mock_client_cls.call_args[0][0]
+        assert config_arg.provider == "anthropic"
+
+    @patch("tfrev.cli.ReviewClient")
+    def test_provider_flag_aws_bedrock(
+        self, mock_client_cls, runner, pass_api_response, mock_git_diff
+    ):
+        """--provider aws-bedrock sets config.provider to 'aws-bedrock'."""
+        mock_client_cls.return_value.review.return_value = pass_api_response
+        plan_file = str(FIXTURES_DIR / "plan_minimal.json")
+
+        result = runner.invoke(
+            main, ["review", "--plan", plan_file, "--provider", "aws-bedrock", "--quiet"]
+        )
+        assert result.exit_code == 0
+        config_arg = mock_client_cls.call_args[0][0]
+        assert config_arg.provider == "aws-bedrock"
+
+    def test_provider_flag_invalid_value(self, runner):
+        """An unrecognised --provider value is rejected by Click before any API call."""
+        plan_file = str(FIXTURES_DIR / "plan_minimal.json")
+        result = runner.invoke(
+            main, ["review", "--plan", plan_file, "--provider", "openai", "--quiet"]
+        )
+        assert result.exit_code == 2
+        assert "'openai' is not one of" in result.output.lower()
+
     def test_runtime_error_from_client(self, runner, mock_git_diff):
         with patch("tfrev.cli.ReviewClient") as mock_client_cls:
             mock_client_cls.side_effect = RuntimeError("ANTHROPIC_API_KEY is not set")

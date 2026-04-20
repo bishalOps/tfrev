@@ -86,7 +86,13 @@ def main():
     default="table",
     help="Output format",
 )
-@click.option("--model", default=None, help="Override Claude model (e.g., claude-sonnet-4-6)")
+@click.option(
+    "--provider",
+    default=None,
+    type=click.Choice(["anthropic", "aws-bedrock"]),
+    help="AI provider to use (overrides .tfrev.yaml)",
+)
+@click.option("--model", default=None, help="Override model (e.g., claude-sonnet-4-6 or a Bedrock model ID)")
 @click.option(
     "--fail-on",
     default=None,
@@ -117,6 +123,7 @@ def review(
     base_ref,
     config_path,
     output_format,
+    provider,
     model,
     fail_on,
     severity_threshold,
@@ -131,6 +138,8 @@ def review(
     config = load_config(config_path)
 
     # Apply CLI overrides
+    if provider:
+        config.provider = provider
     if model:
         config.model = model
     if fail_on:
@@ -207,7 +216,7 @@ def review(
             f"(+{diff.total_additions}/-{diff.total_deletions})",
             err=True,
         )
-        click.echo(f"Model: {config.model}", err=True)
+        click.echo(f"Provider: {config.provider}  Model: {config.model}", err=True)
 
     # --- Discover context files ---
     context_files: dict[str, str] | None = None
@@ -265,21 +274,22 @@ def review(
                 click.echo("Aborting.", err=True)
                 sys.exit(2)
 
+    _provider_label = _provider_display(config.provider)
     if not quiet:
         if not click.confirm(
-            "Send plan + diff to Claude for review?",
+            f"Send plan + diff to {_provider_label} for review?",
             default=True,
             err=True,
         ):
             click.echo("Aborting.", err=True)
             sys.exit(2)
-        click.echo("Sending to Claude for review...", err=True)
+        click.echo(f"Sending to {_provider_label} for review...", err=True)
 
-    # --- Call Claude ---
+    # --- Call API ---
     try:
         client = ReviewClient(config)
         if not quiet:
-            with _Spinner("Waiting for Claude"):
+            with _Spinner(f"Waiting for {_provider_label}"):
                 api_response = client.review(system_prompt, user_prompt)
         else:
             api_response = client.review(system_prompt, user_prompt)
@@ -571,6 +581,11 @@ def _generate_diff(base_ref: str | None, quiet: bool) -> DiffSummary:
             sys.exit(2)
 
     return diff
+
+
+def _provider_display(provider: str) -> str:
+    """Return a human-readable label for a provider identifier."""
+    return "Claude via AWS Bedrock" if provider == "aws-bedrock" else "Claude"
 
 
 if __name__ == "__main__":
