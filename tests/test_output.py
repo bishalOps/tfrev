@@ -6,6 +6,7 @@ import json
 
 import pytest
 
+from tfrev.client import APIResponse
 from tfrev.config import TfrevConfig
 from tfrev.output import format_json, format_markdown, format_table, review_result_from_json
 from tfrev.response_parser import Finding, ReviewResult, ReviewStats
@@ -139,9 +140,25 @@ class TestFormatMarkdown:
         assert "SSH open to internet" in output
         assert "Missing tags" not in output
 
-    def test_footer(self, sample_result, default_config):
+    def test_footer_without_metadata(self, sample_result, default_config):
         output = format_markdown(sample_result, default_config)
         assert "tfrev" in output
+        assert "tokens" not in output
+
+    def test_footer_with_metadata(self, sample_result, default_config):
+        response = APIResponse(
+            content="",
+            model="claude-sonnet-4-6",
+            input_tokens=1847,
+            output_tokens=412,
+            stop_reason="end_turn",
+        )
+        output = format_markdown(sample_result, default_config, response, 3.2)
+        assert "1,847 tokens in" in output
+        assert "412 out" in output
+        assert "3.2s" in output
+        assert "claude-sonnet-4-6" in output
+        assert "anthropic" in output
 
 
 class TestReviewResultFromJson:
@@ -189,3 +206,34 @@ class TestFormatTable:
         output = format_table(sample_result, config)
         assert "F001" in output
         assert "F002" not in output
+
+    def test_footer_without_metadata(self, sample_result, default_config):
+        output = format_table(sample_result, default_config)
+        assert "tokens" not in output
+
+    def test_footer_with_metadata(self, sample_result, default_config):
+        response = APIResponse(
+            content="",
+            model="claude-sonnet-4-6",
+            input_tokens=1847,
+            output_tokens=412,
+            stop_reason="end_turn",
+        )
+        output = format_table(sample_result, default_config, response, 3.2)
+        assert "1,847 tokens in" in output
+        assert "412 out" in output
+        assert "3.2s" in output
+        assert "claude-sonnet-4-6" in output
+        assert "anthropic" in output
+
+    def test_footer_with_metadata_no_findings(self, pass_result_simple, default_config):
+        response = APIResponse(
+            content="",
+            model="claude-sonnet-4-6",
+            input_tokens=500,
+            output_tokens=100,
+            stop_reason="end_turn",
+        )
+        output = format_table(pass_result_simple, default_config, response, 1.5)
+        assert "500 tokens in" in output
+        assert "1.5s" in output

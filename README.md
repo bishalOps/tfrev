@@ -196,6 +196,8 @@ See `.tfrev.yaml.example` for all options.
   [F002] ❗ CRITICAL — RDS database instance set to publicly_accessible=true
 
   ...
+  ────────────────────────────────────────────────────────────────────────
+  1,847 tokens in / 412 out · 3.2s · claude-sonnet-4-6 · anthropic
 ```
 
 ## Output Formats
@@ -204,6 +206,12 @@ See `.tfrev.yaml.example` for all options.
 tfrev review --plan plan.json --output table     # Terminal (default)
 tfrev review --plan plan.json --output markdown  # PR comments
 tfrev review --plan plan.json --output json      # Machine consumption
+```
+
+The `table` and `markdown` outputs include a summary footer showing token usage, review duration, model, and provider:
+
+```
+1,847 tokens in / 412 out · 3.2s · claude-sonnet-4-6 · anthropic
 ```
 
 ## Exit Codes

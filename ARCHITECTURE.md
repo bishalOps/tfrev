@@ -206,6 +206,14 @@ Parses Claude's structured JSON response into internal `ReviewResult` objects. V
 | **Table** | `--output table` (default) | Terminal / local development |
 | **SARIF** | `--output sarif` (future) | IDE integration, GitHub Code Scanning |
 
+The `table` and `markdown` formats append a summary footer to every review:
+
+```
+1,847 tokens in / 412 out · 3.2s · claude-sonnet-4-6 · anthropic
+```
+
+This shows actual token usage (input and output), wall-clock review duration, the model name as reported by the API, and the active provider. The `json` format does not include this footer — token and timing data belong in the structured fields of any downstream tooling that consumes JSON output.
+
 #### 3.3.2 Exit Codes
 
 | Code | Meaning |

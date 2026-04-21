@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 - CLI progress messages now show the active provider (e.g. "Sending to Claude via AWS Bedrock for review...")
 - Summary line now shows `Provider:` alongside `Model:`
+- `table` and `markdown` output formats now include a footer line showing token usage (in/out), wall-clock review duration, model, and provider (e.g. `1,847 tokens in / 412 out · 3.2s · claude-sonnet-4-6 · anthropic`)
 
 ## [2.0.0] - 2026-04-17
 

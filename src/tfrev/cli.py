@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 
 import click
@@ -292,11 +293,13 @@ def review(
     # --- Call API ---
     try:
         client = ReviewClient(config)
+        _t0 = time.perf_counter()
         if not quiet:
             with _Spinner(f"Waiting for {_provider_label}"):
                 api_response = client.review(system_prompt, user_prompt)
         else:
             api_response = client.review(system_prompt, user_prompt)
+        review_duration = time.perf_counter() - _t0
     except RuntimeError as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(2)
@@ -323,9 +326,9 @@ def review(
     if output_format == "json":
         output = format_json(result, config)
     elif output_format == "markdown":
-        output = format_markdown(result, config)
+        output = format_markdown(result, config, api_response, review_duration)
     else:
-        output = format_table(result, config)
+        output = format_table(result, config, api_response, review_duration)
 
     click.echo(output)
 
