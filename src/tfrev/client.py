@@ -47,7 +47,8 @@ class ReviewClient:
             else:
                 # Non-Claude models (e.g. DeepSeek) must use boto3 converse API directly
                 self._boto3_bedrock_client = boto3.client(
-                    "bedrock-runtime", config=boto3.session.Config(connect_timeout=10, read_timeout=120)
+                    "bedrock-runtime",
+                    config=boto3.session.Config(connect_timeout=10, read_timeout=120),
                 )
                 self._client = None  # type: ignore[assignment]
         else:

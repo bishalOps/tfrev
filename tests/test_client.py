@@ -223,7 +223,9 @@ class TestBedrockConverseReview:
             inferenceConfig={"maxTokens": bedrock_config.max_tokens},
         )
 
-    def test_converse_stop_reason_none_becomes_unknown(self, bedrock_config, mock_converse_response):
+    def test_converse_stop_reason_none_becomes_unknown(
+        self, bedrock_config, mock_converse_response
+    ):
         mock_converse_response["stopReason"] = None
         mock_boto3_client = MagicMock()
         mock_boto3_client.converse.return_value = mock_converse_response
