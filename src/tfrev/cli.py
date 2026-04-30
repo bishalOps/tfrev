@@ -279,7 +279,7 @@ def review(
                 click.echo("Aborting.", err=True)
                 sys.exit(2)
 
-    _provider_label = _provider_display(config.provider)
+    _provider_label = _provider_display(config.provider, config.model)
     if not quiet:
         if not click.confirm(
             f"Send plan + diff to {_provider_label} for review?",
@@ -316,7 +316,7 @@ def review(
     result = parse_response(api_response.content)
     if result.parse_failed:
         click.echo(
-            "Error: Claude's response could not be parsed as structured JSON. Raw response:",
+            "Error: Model response could not be parsed as structured JSON. Raw response:",
             err=True,
         )
         click.echo(result.raw_response, err=True)
@@ -590,9 +590,9 @@ def _generate_diff(base_ref: str | None, quiet: bool) -> DiffSummary:
     return diff
 
 
-def _provider_display(provider: str) -> str:
-    """Return a human-readable label for a provider identifier."""
-    return "Claude via AWS Bedrock" if provider == "aws-bedrock" else "Claude"
+def _provider_display(provider: str, model: str) -> str:
+    """Return a human-readable label for a provider/model combination."""
+    return f"{model} via AWS Bedrock" if provider == "aws-bedrock" else model
 
 
 if __name__ == "__main__":
