@@ -38,7 +38,7 @@ class ReviewClient:
                     "boto3 is required for the 'aws-bedrock' provider.\n"
                     "Install it with: pip install 'tfrev[aws]'"
                 ) from exc
-            if config.model.startswith("anthropic."):
+            if "anthropic." in config.model:
                 self._client: anthropic.Anthropic | anthropic.AnthropicBedrock = (
                     anthropic.AnthropicBedrock(
                         timeout=anthropic.Timeout(120.0, connect=10.0),
