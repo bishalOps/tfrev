@@ -520,34 +520,62 @@ def _generate_diff(base_ref: str | None, quiet: bool) -> DiffSummary:
             timeout=30,
         )
         if result.returncode != 0:
-            # Fall back to origin/<base> if the bare ref fails
+            # Three-dot diff requires the merge base, which may not exist in a shallow
+            # clone. Try two-dot diff (tip-to-tip) against the same ref first.
+            result = subprocess.run(
+                ["git", "diff", f"{base}..HEAD", "--", "*.tf", "*.tfvars"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode == 0 and not quiet:
+                click.echo(
+                    f"Note: merge base unavailable (shallow clone?); using two-dot diff "
+                    f"against '{base}'.",
+                    err=True,
+                )
+        if result.returncode != 0:
+            # Fall back to origin/<base> (three-dot then two-dot)
             result = subprocess.run(
                 ["git", "diff", f"origin/{base}...HEAD", "--", "*.tf", "*.tfvars"],
                 capture_output=True,
                 text=True,
                 timeout=30,
             )
-            if result.returncode != 0:
-                # Both refs failed — fall back to empty-tree diff
-                if not quiet:
-                    click.echo(
-                        f"Could not diff against '{base}' or 'origin/{base}'. "
-                        "Reviewing full current state of files.",
-                        err=True,
-                    )
-                result = subprocess.run(
-                    ["git", "diff", _EMPTY_TREE_SHA, "HEAD", "--", "*.tf", "*.tfvars"],
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
+        if result.returncode != 0:
+            result = subprocess.run(
+                ["git", "diff", f"origin/{base}..HEAD", "--", "*.tf", "*.tfvars"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode == 0 and not quiet:
+                click.echo(
+                    f"Note: merge base unavailable (shallow clone?); using two-dot diff "
+                    f"against 'origin/{base}'.",
+                    err=True,
                 )
-                used_empty_tree = True
-                if result.returncode != 0:
-                    click.echo(
-                        f"Error: git diff failed: {result.stderr.strip()}",
-                        err=True,
-                    )
-                    sys.exit(2)
+        if result.returncode != 0:
+            # All ref attempts failed — fall back to empty-tree diff
+            if not quiet:
+                click.echo(
+                    f"Could not diff against '{base}' or 'origin/{base}'. "
+                    "Reviewing full current state of files.",
+                    err=True,
+                )
+            result = subprocess.run(
+                ["git", "diff", _EMPTY_TREE_SHA, "HEAD", "--", "*.tf", "*.tfvars"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            used_empty_tree = True
+            if result.returncode != 0:
+                click.echo(
+                    f"Error: git diff failed: {result.stderr.strip()}",
+                    err=True,
+                )
+                sys.exit(2)
     except FileNotFoundError:
         click.echo("Error: git not found. Is it installed and in PATH?", err=True)
         sys.exit(2)
