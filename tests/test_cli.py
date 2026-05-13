@@ -477,7 +477,9 @@ class TestAutoMode:
             MagicMock(returncode=0, stdout=json.dumps(plan_json), stderr=""),
             MagicMock(returncode=0, stdout="true", stderr=""),  # git check
             MagicMock(returncode=0),  # _detect_default_branch: rev-parse main
-            MagicMock(returncode=128, stdout="", stderr="no merge base"),  # git diff main...HEAD (shallow)
+            MagicMock(
+                returncode=128, stdout="", stderr="no merge base"
+            ),  # git diff main...HEAD (shallow)
             MagicMock(returncode=0, stdout=diff_text, stderr=""),  # git diff main..HEAD (two-dot)
             MagicMock(returncode=0, stdout="/tmp\n", stderr=""),  # git toplevel
         ]
@@ -507,8 +509,12 @@ class TestAutoMode:
             MagicMock(returncode=0),  # _detect_default_branch: rev-parse main
             MagicMock(returncode=1, stdout="", stderr="unknown revision"),  # git diff main...HEAD
             MagicMock(returncode=1, stdout="", stderr="unknown revision"),  # git diff main..HEAD
-            MagicMock(returncode=1, stdout="", stderr="unknown revision"),  # git diff origin/main...HEAD
-            MagicMock(returncode=1, stdout="", stderr="unknown revision"),  # git diff origin/main..HEAD
+            MagicMock(
+                returncode=1, stdout="", stderr="unknown revision"
+            ),  # git diff origin/main...HEAD
+            MagicMock(
+                returncode=1, stdout="", stderr="unknown revision"
+            ),  # git diff origin/main..HEAD
             MagicMock(returncode=0, stdout=diff_text, stderr=""),  # empty-tree fallback
             MagicMock(returncode=0, stdout="/tmp\n", stderr=""),  # git toplevel
         ]
