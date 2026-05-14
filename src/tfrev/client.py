@@ -66,6 +66,7 @@ class ReviewClient:
 
     def _review_via_bedrock_converse(self, system_prompt: str, user_prompt: str) -> APIResponse:
         """Send a review request using boto3 Bedrock converse API (non-Claude models)."""
+        assert self._boto3_bedrock_client is not None
         response = self._boto3_bedrock_client.converse(
             modelId=self.config.model,
             system=[{"text": system_prompt}],
