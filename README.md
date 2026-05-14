@@ -59,6 +59,15 @@ To diff against a specific ref (e.g. last deployed SHA):
 tfrev review --plan plan.json --base-ref abc1234
 ```
 
+To include additional file types in the diff (e.g. Helm `values.yaml` files
+or JSON variable files) alongside the default `*.tf` / `*.tfvars`:
+
+```bash
+tfrev review --plan plan.json --diff-pattern '*.yaml' --diff-pattern '*.yml'
+```
+
+The defaults are always retained — `--diff-pattern` is strictly additive.
+
 ## What It Catches
 
 - **Intent mismatches** — plan does something the code change didn't intend
@@ -143,6 +152,12 @@ sensitive_resources:
   - aws_iam_*            # AWS
   - google_project_iam_* # GCP
   - azurerm_key_vault*   # Azure
+
+# Extra file types to include in the diff (additive to *.tf and *.tfvars).
+# Useful when your Terraform modules consume Helm values files, JSON configs, etc.
+diff_patterns:
+  - "*.yaml"
+  - "*.yml"
 ```
 
 For AWS Bedrock, set `provider: aws-bedrock`, install `tfrev[aws]`, and use a Bedrock model ID. Region and credentials are read from the standard AWS credential chain (`AWS_DEFAULT_REGION`, `~/.aws/config`, IAM role, etc.):
