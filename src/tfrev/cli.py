@@ -122,6 +122,16 @@ def main():
     "--no-context", "no_context", is_flag=True, help="Disable auto-discovery of source files"
 )
 @click.option("--quiet", is_flag=True, help="Suppress progress messages")
+@click.option(
+    "--diff-pattern",
+    "extra_diff_patterns",
+    multiple=True,
+    default=[],
+    help=(
+        "Additional glob pattern to include in the diff (repeatable, e.g. '*.yaml'). "
+        "The default patterns *.tf and *.tfvars are always included."
+    ),
+)
 def review(
     plan_path,
     auto_mode,
@@ -136,6 +146,7 @@ def review(
     context_dir,
     no_context,
     quiet,
+    extra_diff_patterns,
 ):
     """Review a Terraform plan against code changes."""
 
@@ -203,7 +214,8 @@ def review(
             )
             sys.exit(2)
 
-    diff = _generate_diff(base_ref, quiet)
+    diff_patterns = ["*.tf", "*.tfvars"] + config.diff_patterns + list(extra_diff_patterns)
+    diff = _generate_diff(base_ref, quiet, diff_patterns)
 
     # --- Apply ignore patterns ---
     if config.ignore:
@@ -430,19 +442,22 @@ def _detect_default_branch() -> str:
     return "main"
 
 
-def _scan_tf_files(directory: Path, quiet: bool) -> DiffSummary:
-    """Build a DiffSummary by reading all .tf/.tfvars files in a directory tree."""
+def _scan_tf_files(directory: Path, quiet: bool, patterns: list[str] | None = None) -> DiffSummary:
+    """Build a DiffSummary by reading all files matching patterns in a directory tree."""
+    if patterns is None:
+        patterns = ["*.tf", "*.tfvars"]
 
+    glob_patterns = [p if p.startswith("**") else f"**/{p}" for p in patterns]
     tf_files = sorted(
         p
-        for pattern in ("**/*.tf", "**/*.tfvars")
-        for p in directory.glob(pattern)
+        for glob_pat in glob_patterns
+        for p in directory.glob(glob_pat)
         if ".terraform" not in p.parts
     )
 
     if not tf_files:
         if not quiet:
-            click.echo("No .tf or .tfvars files found in current directory.", err=True)
+            click.echo("No matching files found in current directory.", err=True)
         return DiffSummary(files=[])
 
     files: list[FileDiff] = []
@@ -466,17 +481,21 @@ def _scan_tf_files(directory: Path, quiet: bool) -> DiffSummary:
         files.append(FileDiff(path=rel, status="added", hunks=[hunk]))
 
     if not quiet:
-        click.echo(f"Found {len(files)} Terraform file(s).", err=True)
+        click.echo(f"Found {len(files)} file(s) matching diff patterns.", err=True)
 
     return DiffSummary(files=files)
 
 
-def _generate_diff(base_ref: str | None, quiet: bool) -> DiffSummary:
+def _generate_diff(
+    base_ref: str | None, quiet: bool, patterns: list[str] | None = None
+) -> DiffSummary:
     """Generate a git diff against base_ref (or CI/main fallback).
 
-    If no Terraform files changed vs the base ref (e.g. first commit), falls
-    back to diffing against the empty tree so all current files are visible.
+    If no files changed vs the base ref (e.g. first commit), falls back to
+    diffing against the empty tree so all current files are visible.
     """
+    if patterns is None:
+        patterns = ["*.tf", "*.tfvars"]
     # Check we're inside a git repository
     has_git = False
     try:
@@ -497,7 +516,7 @@ def _generate_diff(base_ref: str | None, quiet: bool) -> DiffSummary:
                 "Not a git repository. Scanning current directory for Terraform files.",
                 err=True,
             )
-        return _scan_tf_files(Path.cwd(), quiet)
+        return _scan_tf_files(Path.cwd(), quiet, patterns)
 
     base = (
         base_ref
@@ -514,40 +533,68 @@ def _generate_diff(base_ref: str | None, quiet: bool) -> DiffSummary:
     used_empty_tree = False
     try:
         result = subprocess.run(
-            ["git", "diff", f"{base}...HEAD", "--", "*.tf", "*.tfvars"],
+            ["git", "diff", f"{base}...HEAD", "--", *patterns],
             capture_output=True,
             text=True,
             timeout=30,
         )
         if result.returncode != 0:
-            # Fall back to origin/<base> if the bare ref fails
+            # Three-dot diff requires the merge base, which may not exist in a shallow
+            # clone. Try two-dot diff (tip-to-tip) against the same ref first.
             result = subprocess.run(
-                ["git", "diff", f"origin/{base}...HEAD", "--", "*.tf", "*.tfvars"],
+                ["git", "diff", f"{base}..HEAD", "--", *patterns],
                 capture_output=True,
                 text=True,
                 timeout=30,
             )
-            if result.returncode != 0:
-                # Both refs failed — fall back to empty-tree diff
-                if not quiet:
-                    click.echo(
-                        f"Could not diff against '{base}' or 'origin/{base}'. "
-                        "Reviewing full current state of files.",
-                        err=True,
-                    )
-                result = subprocess.run(
-                    ["git", "diff", _EMPTY_TREE_SHA, "HEAD", "--", "*.tf", "*.tfvars"],
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
+            if result.returncode == 0 and not quiet:
+                click.echo(
+                    f"Note: merge base unavailable (shallow clone?); using two-dot diff "
+                    f"against '{base}'.",
+                    err=True,
                 )
-                used_empty_tree = True
-                if result.returncode != 0:
-                    click.echo(
-                        f"Error: git diff failed: {result.stderr.strip()}",
-                        err=True,
-                    )
-                    sys.exit(2)
+        if result.returncode != 0:
+            # Fall back to origin/<base> (three-dot then two-dot)
+            result = subprocess.run(
+                ["git", "diff", f"origin/{base}...HEAD", "--", *patterns],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+        if result.returncode != 0:
+            result = subprocess.run(
+                ["git", "diff", f"origin/{base}..HEAD", "--", *patterns],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode == 0 and not quiet:
+                click.echo(
+                    f"Note: merge base unavailable (shallow clone?); using two-dot diff "
+                    f"against 'origin/{base}'.",
+                    err=True,
+                )
+        if result.returncode != 0:
+            # All ref attempts failed — fall back to empty-tree diff
+            if not quiet:
+                click.echo(
+                    f"Could not diff against '{base}' or 'origin/{base}'. "
+                    "Reviewing full current state of files.",
+                    err=True,
+                )
+            result = subprocess.run(
+                ["git", "diff", _EMPTY_TREE_SHA, "HEAD", "--", *patterns],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            used_empty_tree = True
+            if result.returncode != 0:
+                click.echo(
+                    f"Error: git diff failed: {result.stderr.strip()}",
+                    err=True,
+                )
+                sys.exit(2)
     except FileNotFoundError:
         click.echo("Error: git not found. Is it installed and in PATH?", err=True)
         sys.exit(2)
@@ -570,7 +617,7 @@ def _generate_diff(base_ref: str | None, quiet: bool) -> DiffSummary:
             )
         try:
             result = subprocess.run(
-                ["git", "diff", _EMPTY_TREE_SHA, "HEAD", "--", "*.tf", "*.tfvars"],
+                ["git", "diff", _EMPTY_TREE_SHA, "HEAD", "--", *patterns],
                 capture_output=True,
                 text=True,
                 timeout=30,

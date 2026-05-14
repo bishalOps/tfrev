@@ -46,6 +46,9 @@ class TfrevConfig:
     # Ignore patterns
     ignore: list[str] = field(default_factory=list)
 
+    # Extra diff patterns (additive to the *.tf / *.tfvars defaults)
+    diff_patterns: list[str] = field(default_factory=list)
+
 
 # Severity ordering for comparisons
 SEVERITY_ORDER = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
@@ -110,6 +113,8 @@ def load_config(config_path: str | Path | None = None) -> TfrevConfig:
         config.sensitive_resources = raw["sensitive_resources"]
     if "ignore" in raw:
         config.ignore = raw["ignore"]
+    if "diff_patterns" in raw:
+        config.diff_patterns = raw["diff_patterns"]
 
     # Parse policies
     for policy_raw in raw.get("policies", []):

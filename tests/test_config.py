@@ -62,6 +62,7 @@ class TestLoadConfig:
         assert config.policies == []
         assert config.sensitive_resources == []
         assert config.ignore == []
+        assert config.diff_patterns == []
 
     def test_provider_aws_bedrock(self, tmp_path):
         config_file = tmp_path / ".tfrev.yaml"
@@ -91,6 +92,13 @@ class TestLoadConfig:
         assert "aws_iam_*" in config.sensitive_resources
         assert len(config.ignore) == 2
         assert "*.auto.tfvars" in config.ignore
+        assert config.diff_patterns == ["*.yaml", "*.yml"]
+
+    def test_diff_patterns_parsed(self, tmp_path):
+        config_file = tmp_path / ".tfrev.yaml"
+        config_file.write_text("diff_patterns:\n  - '*.yaml'\n  - '*.json'\n")
+        config = load_config(config_file)
+        assert config.diff_patterns == ["*.yaml", "*.json"]
 
     def test_missing_file_raises(self):
         with pytest.raises(FileNotFoundError):
