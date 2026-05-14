@@ -374,6 +374,202 @@ class TestReviewCommand:
         mock_client_cls.return_value.review.assert_called_once()
 
 
+class TestDiffPatterns:
+    @patch("tfrev.cli.ReviewClient")
+    def test_default_patterns_in_git_diff(
+        self, mock_client_cls, runner, pass_api_response, mock_git_diff
+    ):
+        """Without --diff-pattern, git diff uses *.tf and *.tfvars."""
+        mock_client_cls.return_value.review.return_value = pass_api_response
+        plan_file = str(FIXTURES_DIR / "plan_minimal.json")
+
+        runner.invoke(main, ["review", "--plan", plan_file, "--base-ref", "HEAD~1", "--quiet"])
+        diff_calls = [
+            c.args[0] for c in mock_git_diff.call_args_list if c.args and "diff" in c.args[0]
+        ]
+        assert diff_calls, "no git-diff call was made"
+        assert "*.tf" in diff_calls[0]
+        assert "*.tfvars" in diff_calls[0]
+
+    @patch("tfrev.cli.ReviewClient")
+    def test_extra_diff_pattern_appended(
+        self, mock_client_cls, runner, pass_api_response, mock_git_diff
+    ):
+        """--diff-pattern adds to the default patterns without replacing them."""
+        mock_client_cls.return_value.review.return_value = pass_api_response
+        plan_file = str(FIXTURES_DIR / "plan_minimal.json")
+
+        runner.invoke(
+            main,
+            [
+                "review",
+                "--plan",
+                plan_file,
+                "--base-ref",
+                "HEAD~1",
+                "--diff-pattern",
+                "*.yaml",
+                "--quiet",
+            ],
+        )
+        diff_calls = [
+            c.args[0] for c in mock_git_diff.call_args_list if c.args and "diff" in c.args[0]
+        ]
+        assert diff_calls, "no git-diff call was made"
+        assert "*.tf" in diff_calls[0]
+        assert "*.tfvars" in diff_calls[0]
+        assert "*.yaml" in diff_calls[0]
+
+    @patch("tfrev.cli.ReviewClient")
+    def test_config_diff_patterns_merged(
+        self, mock_client_cls, runner, pass_api_response, mock_git_diff, tmp_path
+    ):
+        """diff_patterns from .tfrev.yaml are merged with the defaults."""
+        mock_client_cls.return_value.review.return_value = pass_api_response
+        plan_file = str(FIXTURES_DIR / "plan_minimal.json")
+        config_file = tmp_path / ".tfrev.yaml"
+        config_file.write_text("diff_patterns:\n  - '*.yaml'\n")
+
+        runner.invoke(
+            main,
+            [
+                "review",
+                "--plan",
+                plan_file,
+                "--base-ref",
+                "HEAD~1",
+                "--config",
+                str(config_file),
+                "--quiet",
+            ],
+        )
+        diff_calls = [
+            c.args[0] for c in mock_git_diff.call_args_list if c.args and "diff" in c.args[0]
+        ]
+        assert diff_calls, "no git-diff call was made"
+        assert "*.tf" in diff_calls[0]
+        assert "*.tfvars" in diff_calls[0]
+        assert "*.yaml" in diff_calls[0]
+
+    @patch("tfrev.cli.ReviewClient")
+    def test_config_and_cli_diff_patterns_combined(
+        self, mock_client_cls, runner, pass_api_response, mock_git_diff, tmp_path
+    ):
+        """CLI --diff-pattern and config diff_patterns are both included."""
+        mock_client_cls.return_value.review.return_value = pass_api_response
+        plan_file = str(FIXTURES_DIR / "plan_minimal.json")
+        config_file = tmp_path / ".tfrev.yaml"
+        config_file.write_text("diff_patterns:\n  - '*.yaml'\n")
+
+        runner.invoke(
+            main,
+            [
+                "review",
+                "--plan",
+                plan_file,
+                "--base-ref",
+                "HEAD~1",
+                "--config",
+                str(config_file),
+                "--diff-pattern",
+                "*.json",
+                "--quiet",
+            ],
+        )
+        diff_calls = [
+            c.args[0] for c in mock_git_diff.call_args_list if c.args and "diff" in c.args[0]
+        ]
+        assert diff_calls
+        assert "*.tf" in diff_calls[0]
+        assert "*.yaml" in diff_calls[0]
+        assert "*.json" in diff_calls[0]
+
+    @patch("tfrev.cli.ReviewClient")
+    def test_multiple_extra_diff_patterns(
+        self, mock_client_cls, runner, pass_api_response, mock_git_diff
+    ):
+        """Multiple --diff-pattern flags are all included alongside the defaults."""
+        mock_client_cls.return_value.review.return_value = pass_api_response
+        plan_file = str(FIXTURES_DIR / "plan_minimal.json")
+
+        runner.invoke(
+            main,
+            [
+                "review",
+                "--plan",
+                plan_file,
+                "--base-ref",
+                "HEAD~1",
+                "--diff-pattern",
+                "*.yaml",
+                "--diff-pattern",
+                "*.yml",
+                "--quiet",
+            ],
+        )
+        diff_calls = [
+            c.args[0] for c in mock_git_diff.call_args_list if c.args and "diff" in c.args[0]
+        ]
+        assert diff_calls
+        assert "*.tf" in diff_calls[0]
+        assert "*.yaml" in diff_calls[0]
+        assert "*.yml" in diff_calls[0]
+
+
+class TestScanTfFiles:
+    def test_default_patterns_include_only_tf(self, tmp_path):
+        """By default, _scan_tf_files picks up .tf and .tfvars but not .yaml."""
+        from tfrev.cli import _scan_tf_files
+
+        (tmp_path / "main.tf").write_text('resource "null_resource" "x" {}\n')
+        (tmp_path / "values.yaml").write_text("key: value\n")
+
+        result = _scan_tf_files(tmp_path, quiet=True)
+        paths = [f.path for f in result.files]
+        assert any("main.tf" in p for p in paths)
+        assert not any("values.yaml" in p for p in paths)
+
+    def test_custom_pattern_includes_yaml(self, tmp_path):
+        """Passing a custom pattern causes .yaml files to be included."""
+        from tfrev.cli import _scan_tf_files
+
+        (tmp_path / "main.tf").write_text('resource "null_resource" "x" {}\n')
+        (tmp_path / "values.yaml").write_text("key: value\n")
+
+        result = _scan_tf_files(tmp_path, quiet=True, patterns=["*.tf", "*.tfvars", "*.yaml"])
+        paths = [f.path for f in result.files]
+        assert any("main.tf" in p for p in paths)
+        assert any("values.yaml" in p for p in paths)
+
+    def test_terraform_dir_always_excluded(self, tmp_path):
+        """Files under .terraform/ are excluded regardless of patterns."""
+        from tfrev.cli import _scan_tf_files
+
+        tf_dir = tmp_path / ".terraform"
+        tf_dir.mkdir()
+        (tf_dir / "cached.tf").write_text("# cached\n")
+        (tmp_path / "main.tf").write_text('resource "null_resource" "x" {}\n')
+
+        result = _scan_tf_files(tmp_path, quiet=True)
+        paths = [f.path for f in result.files]
+        assert not any(".terraform" in p for p in paths)
+        assert any("main.tf" in p for p in paths)
+
+    def test_subdirectory_files_discovered(self, tmp_path):
+        """Files in subdirectories are found via the ** glob."""
+        from tfrev.cli import _scan_tf_files
+
+        subdir = tmp_path / "helm"
+        subdir.mkdir()
+        (subdir / "values.yaml").write_text("replicaCount: 1\n")
+        (tmp_path / "main.tf").write_text('resource "null_resource" "x" {}\n')
+
+        result = _scan_tf_files(tmp_path, quiet=True, patterns=["*.tf", "*.yaml"])
+        paths = [f.path for f in result.files]
+        assert any("main.tf" in p for p in paths)
+        assert any("values.yaml" in p for p in paths)
+
+
 class TestAutoMode:
     @patch("tfrev.cli.subprocess.run")
     @patch("tfrev.cli.Path")
