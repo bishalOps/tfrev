@@ -161,17 +161,20 @@ The prompt builder also handles **context window management**:
 
 #### 3.2.2 Claude API Client (`tfrev/client.py`)
 
-Thin wrapper around the Anthropic Python SDK. The active provider is selected at instantiation time based on `config.provider`:
+Thin wrapper that selects an API backend at instantiation time based on `config.provider` and `config.model`:
 
 ```python
 # provider: anthropic (default)
 client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
-# provider: aws-bedrock
-client = anthropic.AnthropicBedrock()  # region/credentials from AWS credential chain
+# provider: aws-bedrock, Claude model (model ID starts with "anthropic.")
+client = anthropic.AnthropicBedrock()   # uses messages.create()
+
+# provider: aws-bedrock, non-Claude model (e.g. DeepSeek)
+client = boto3.client("bedrock-runtime")  # uses converse()
 ```
 
-Both clients share the same `messages.create()` interface, so the `review()` method is identical regardless of provider.
+Claude models on Bedrock use the `AnthropicBedrock` SDK wrapper (`messages.create()`). Non-Claude models — such as DeepSeek — are not supported by the Anthropic SDK and are called directly via boto3's `bedrock-runtime` `converse` API, which is a universal interface supported by all Bedrock models.
 
 **Provider selection** is driven by `.tfrev.yaml`:
 
@@ -179,7 +182,9 @@ Both clients share the same `messages.create()` interface, so the `review()` met
 provider: anthropic      # direct Anthropic API (default)
 # — or —
 provider: aws-bedrock    # via AWS Bedrock (requires pip install 'tfrev[aws]')
-model: anthropic.claude-sonnet-4-5-20250514-v1:0
+model: anthropic.claude-sonnet-4-5-20250514-v1:0   # Claude on Bedrock
+# — or —
+model: deepseek.deepseek-r1-v1:0                    # non-Claude model on Bedrock
 # region and credentials come from the standard AWS credential chain
 ```
 
@@ -309,8 +314,8 @@ This makes the simplest CI integration a single line: `tfrev review --auto`
 | Component | Technology | Rationale |
 |-----------|-----------|-----------|
 | Language | **Python 3.9+** | Universal CI availability, easy pip install, largest contributor pool |
-| API Client | **anthropic** (official SDK) | Single SDK covers both Anthropic API and AWS Bedrock via `AnthropicBedrock` |
-| AWS Bedrock | **boto3** (optional extra) | Standard AWS SDK; required only when `provider: aws-bedrock` is configured |
+| API Client | **anthropic** (official SDK) | Covers Anthropic API and Claude models on AWS Bedrock via `AnthropicBedrock` |
+| AWS Bedrock | **boto3** (optional extra) | Required for `provider: aws-bedrock`; used directly (converse API) for non-Claude models (e.g. DeepSeek) |
 | CLI Framework | **click** | Industry standard for Python CLIs |
 | Packaging | **pip / PyPI** | `pip install tfrev` or `pip install 'tfrev[aws]'` for Bedrock support |
 | Alternative Install | **Docker** | `docker run ghcr.io/org/tfrev` for hermetic environments |

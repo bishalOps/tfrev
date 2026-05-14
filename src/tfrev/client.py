@@ -28,20 +28,29 @@ class ReviewClient:
 
     def __init__(self, config: TfrevConfig):
         self.config = config
+        self._boto3_bedrock_client = None
 
         if config.provider == "aws-bedrock":
             try:
-                import boto3  # noqa: F401
+                import boto3
             except ImportError as exc:
                 raise RuntimeError(
                     "boto3 is required for the 'aws-bedrock' provider.\n"
                     "Install it with: pip install 'tfrev[aws]'"
                 ) from exc
-            self._client: anthropic.Anthropic | anthropic.AnthropicBedrock = (
-                anthropic.AnthropicBedrock(
-                    timeout=anthropic.Timeout(120.0, connect=10.0),
+            if "anthropic." in config.model:
+                self._client: anthropic.Anthropic | anthropic.AnthropicBedrock = (
+                    anthropic.AnthropicBedrock(
+                        timeout=anthropic.Timeout(120.0, connect=10.0),
+                    )
                 )
-            )
+            else:
+                # Non-Claude models (e.g. DeepSeek) must use boto3 converse API directly
+                self._boto3_bedrock_client = boto3.client(
+                    "bedrock-runtime",
+                    config=boto3.session.Config(connect_timeout=10, read_timeout=120),
+                )
+                self._client = None  # type: ignore[assignment]
         else:
             api_key = os.environ.get("ANTHROPIC_API_KEY")
             if not api_key:
@@ -55,6 +64,28 @@ class ReviewClient:
                 timeout=anthropic.Timeout(120.0, connect=10.0),
             )
 
+    def _review_via_bedrock_converse(self, system_prompt: str, user_prompt: str) -> APIResponse:
+        """Send a review request using boto3 Bedrock converse API (non-Claude models)."""
+        assert self._boto3_bedrock_client is not None
+        response = self._boto3_bedrock_client.converse(
+            modelId=self.config.model,
+            system=[{"text": system_prompt}],
+            messages=[{"role": "user", "content": [{"text": user_prompt}]}],
+            inferenceConfig={"maxTokens": self.config.max_tokens},
+        )
+        content = ""
+        for block in response.get("output", {}).get("message", {}).get("content", []):
+            if "text" in block:
+                content += block["text"]
+        usage = response.get("usage", {})
+        return APIResponse(
+            content=content,
+            model=self.config.model,
+            input_tokens=usage.get("inputTokens", 0),
+            output_tokens=usage.get("outputTokens", 0),
+            stop_reason=response.get("stopReason") or "unknown",
+        )
+
     def review(self, system_prompt: str, user_prompt: str) -> APIResponse:
         """Send a review request to Claude with retry logic."""
         max_retries = 3
@@ -62,6 +93,9 @@ class ReviewClient:
 
         for attempt in range(max_retries):
             try:
+                if self._boto3_bedrock_client is not None:
+                    return self._review_via_bedrock_converse(system_prompt, user_prompt)
+
                 response = self._client.messages.create(
                     model=self.config.model,
                     max_tokens=self.config.max_tokens,
