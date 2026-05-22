@@ -449,14 +449,45 @@ class TestAutoMode:
             MagicMock(returncode=0, stdout=json.dumps(plan_json), stderr=""),
             MagicMock(returncode=0, stdout="true", stderr=""),  # git check
             MagicMock(returncode=0),  # _detect_default_branch: rev-parse main
-            MagicMock(returncode=1, stdout="", stderr="unknown revision"),  # git diff main
-            MagicMock(returncode=0, stdout=diff_text, stderr=""),  # git diff origin/main
+            MagicMock(returncode=1, stdout="", stderr="unknown revision"),  # git diff main...HEAD
+            MagicMock(returncode=1, stdout="", stderr="unknown revision"),  # git diff main..HEAD
+            MagicMock(returncode=0, stdout=diff_text, stderr=""),  # git diff origin/main...HEAD
             MagicMock(returncode=0, stdout="/tmp\n", stderr=""),  # git toplevel
         ]
         mock_client_cls.return_value.review.return_value = pass_api_response
 
         result = runner.invoke(main, ["review", "--auto", "--quiet"])
         assert result.exit_code == 0
+
+    @patch("tfrev.cli.ReviewClient")
+    @patch("tfrev.cli.subprocess.run")
+    @patch("tfrev.cli.Path")
+    def test_shallow_clone_falls_back_to_two_dot(
+        self, mock_path_cls, mock_subproc, mock_client_cls, runner, pass_api_response
+    ):
+        """In a shallow clone, three-dot diff fails but two-dot diff succeeds."""
+        mock_plan = MagicMock()
+        mock_plan.exists.return_value = True
+        mock_plan.__str__ = lambda self: "tfplan"
+        mock_path_cls.return_value.glob.return_value = [mock_plan]
+
+        plan_json = json.loads((FIXTURES_DIR / "plan_minimal.json").read_text())
+        diff_text = (FIXTURES_DIR / "diff_simple.diff").read_text()
+        mock_subproc.side_effect = [
+            MagicMock(returncode=0, stdout=json.dumps(plan_json), stderr=""),
+            MagicMock(returncode=0, stdout="true", stderr=""),  # git check
+            MagicMock(returncode=0),  # _detect_default_branch: rev-parse main
+            MagicMock(
+                returncode=128, stdout="", stderr="no merge base"
+            ),  # git diff main...HEAD (shallow)
+            MagicMock(returncode=0, stdout=diff_text, stderr=""),  # git diff main..HEAD (two-dot)
+            MagicMock(returncode=0, stdout="/tmp\n", stderr=""),  # git toplevel
+        ]
+        mock_client_cls.return_value.review.return_value = pass_api_response
+
+        result = runner.invoke(main, ["review", "--auto", "--quiet"])
+        assert result.exit_code == 0
+        mock_client_cls.return_value.review.assert_called_once()
 
     @patch("tfrev.cli.ReviewClient")
     @patch("tfrev.cli.subprocess.run")
@@ -476,8 +507,14 @@ class TestAutoMode:
             MagicMock(returncode=0, stdout=json.dumps(plan_json), stderr=""),
             MagicMock(returncode=0, stdout="true", stderr=""),  # git check
             MagicMock(returncode=0),  # _detect_default_branch: rev-parse main
-            MagicMock(returncode=1, stdout="", stderr="unknown revision"),  # git diff main
-            MagicMock(returncode=1, stdout="", stderr="unknown revision"),  # git diff origin/main
+            MagicMock(returncode=1, stdout="", stderr="unknown revision"),  # git diff main...HEAD
+            MagicMock(returncode=1, stdout="", stderr="unknown revision"),  # git diff main..HEAD
+            MagicMock(
+                returncode=1, stdout="", stderr="unknown revision"
+            ),  # git diff origin/main...HEAD
+            MagicMock(
+                returncode=1, stdout="", stderr="unknown revision"
+            ),  # git diff origin/main..HEAD
             MagicMock(returncode=0, stdout=diff_text, stderr=""),  # empty-tree fallback
             MagicMock(returncode=0, stdout="/tmp\n", stderr=""),  # git toplevel
         ]
