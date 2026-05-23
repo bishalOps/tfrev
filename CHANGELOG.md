@@ -6,8 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-05-22
+
 ### Added
+- Non-Claude model support on AWS Bedrock. When `provider: aws-bedrock` is used with a model ID that is not a Claude model (i.e. does not start with `anthropic.`), tfrev routes requests through the Bedrock `converse` API via `boto3` instead of the Claude-only `AnthropicBedrock` wrapper, enabling models such as DeepSeek (contributed by [@fatmcgav](https://github.com/fatmcgav) in [#4](https://github.com/bishalOps/tfrev/pull/4))
 - `--diff-pattern` CLI flag (repeatable) and `diff_patterns` config key to include extra file globs (e.g. Helm `values.yaml` or JSON variable files) in the reviewed diff alongside the always-included defaults `*.tf` / `*.tfvars`. Patterns are additive and compose as `defaults + config + CLI flags` (contributed by [@fatmcgav](https://github.com/fatmcgav) in [#7](https://github.com/bishalOps/tfrev/pull/7)). Overlapping patterns are de-duplicated in non-git directory scans, and a non-list `diff_patterns` value now raises a clear configuration error.
+
+### Fixed
+- Diff generation falls back to a two-dot diff (tip-to-tip) when the merge base is unavailable, such as in shallow CI clones, before resorting to the full empty-tree state, so changes in shallow checkouts are diffed correctly ([#6](https://github.com/bishalOps/tfrev/pull/6))
 
 ## [2.1.0] - 2026-04-23
 
