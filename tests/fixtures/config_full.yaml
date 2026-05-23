@@ -24,3 +24,7 @@ sensitive_resources:
 ignore:
   - "*.auto.tfvars"
   - "backend.tf"
+
+diff_patterns:
+  - "*.yaml"
+  - "*.yml"
