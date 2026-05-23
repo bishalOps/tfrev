@@ -569,6 +569,16 @@ class TestScanTfFiles:
         assert any("main.tf" in p for p in paths)
         assert any("values.yaml" in p for p in paths)
 
+    def test_overlapping_patterns_do_not_duplicate_files(self, tmp_path):
+        """Redundant/overlapping patterns must not yield duplicate FileDiff entries."""
+        from tfrev.cli import _scan_tf_files
+
+        (tmp_path / "main.tf").write_text('resource "null_resource" "x" {}\n')
+
+        result = _scan_tf_files(tmp_path, quiet=True, patterns=["*.tf", "*.tf"])
+        paths = [f.path for f in result.files]
+        assert paths.count("main.tf") == 1
+
 
 class TestAutoMode:
     @patch("tfrev.cli.subprocess.run")

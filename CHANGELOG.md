@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+- `--diff-pattern` CLI flag (repeatable) and `diff_patterns` config key to include extra file globs (e.g. Helm `values.yaml` or JSON variable files) in the reviewed diff alongside the always-included defaults `*.tf` / `*.tfvars`. Patterns are additive and compose as `defaults + config + CLI flags` (contributed by [@fatmcgav](https://github.com/fatmcgav) in [#7](https://github.com/bishalOps/tfrev/pull/7)). Overlapping patterns are de-duplicated in non-git directory scans, and a non-list `diff_patterns` value now raises a clear configuration error.
+
 ## [2.1.0] - 2026-04-23
 
 ### Added
