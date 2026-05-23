@@ -126,7 +126,7 @@ def main():
     "--diff-pattern",
     "extra_diff_patterns",
     multiple=True,
-    default=[],
+    default=(),
     help=(
         "Additional glob pattern to include in the diff (repeatable, e.g. '*.yaml'). "
         "The default patterns *.tf and *.tfvars are always included."
@@ -449,10 +449,12 @@ def _scan_tf_files(directory: Path, quiet: bool, patterns: list[str] | None = No
 
     glob_patterns = [p if p.startswith("**") else f"**/{p}" for p in patterns]
     tf_files = sorted(
-        p
-        for glob_pat in glob_patterns
-        for p in directory.glob(glob_pat)
-        if ".terraform" not in p.parts
+        {
+            p
+            for glob_pat in glob_patterns
+            for p in directory.glob(glob_pat)
+            if ".terraform" not in p.parts
+        }
     )
 
     if not tf_files:

@@ -100,6 +100,13 @@ class TestLoadConfig:
         config = load_config(config_file)
         assert config.diff_patterns == ["*.yaml", "*.json"]
 
+    def test_diff_patterns_scalar_raises(self, tmp_path):
+        """A scalar diff_patterns value raises a clear error instead of crashing later."""
+        config_file = tmp_path / ".tfrev.yaml"
+        config_file.write_text('diff_patterns: "*.yaml"\n')
+        with pytest.raises(ValueError, match="diff_patterns"):
+            load_config(config_file)
+
     def test_missing_file_raises(self):
         with pytest.raises(FileNotFoundError):
             load_config("/nonexistent/.tfrev.yaml")

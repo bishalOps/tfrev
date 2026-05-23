@@ -114,7 +114,14 @@ def load_config(config_path: str | Path | None = None) -> TfrevConfig:
     if "ignore" in raw:
         config.ignore = raw["ignore"]
     if "diff_patterns" in raw:
-        config.diff_patterns = raw["diff_patterns"]
+        diff_patterns = raw["diff_patterns"]
+        if not isinstance(diff_patterns, list):
+            raise ValueError(
+                f"Invalid diff_patterns: expected a list of glob strings, got "
+                f"{type(diff_patterns).__name__}. Use YAML list syntax, e.g. "
+                f"diff_patterns:\n  - '*.yaml'"
+            )
+        config.diff_patterns = diff_patterns
 
     # Parse policies
     for policy_raw in raw.get("policies", []):
