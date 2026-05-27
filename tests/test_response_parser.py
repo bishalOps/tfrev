@@ -139,3 +139,36 @@ class TestExtractJson:
         )
         extracted = _extract_json(text)
         assert json.loads(extracted) == {"verdict": "PASS"}
+
+    def test_json_fence_with_codeblock_in_string_value(self):
+        """Regression: code fence inside a JSON string value must not truncate extraction.
+
+        Claude sometimes includes HCL/code examples in recommendation fields,
+        encoded as JSON string escapes (\\n```hcl...\\n```).  The ``` chars are
+        preceded by the two-character escape sequence \\n (0x5C 0x6E), not a real
+        newline (0x0A).  The closing fence of the outer ```json block IS preceded
+        by a real newline, so requiring \\n before the closing ``` distinguishes
+        the two cases and prevents early termination.
+        """
+        # Simulate a real Claude response: outer ```json fence wrapping JSON that
+        # contains a Markdown code block inside a string value.
+        text = (
+            "```json\n"
+            '{"verdict": "PASS", "recommendation": '
+            '"Add a filter:\\n```hcl\\nresource \\"x\\" \\"y\\" {}\\n```\\nDone."}\n'
+            "```\n"
+        )
+        extracted = _extract_json(text)
+        result = json.loads(extracted)
+        assert result["verdict"] == "PASS"
+        assert "```hcl" in result["recommendation"]
+
+
+class TestParseResponseFencedCodeblock:
+    def test_fenced_with_codeblock_in_recommendation(self, fenced_codeblock_response_text):
+        """Regression: parse_response must not fail when a recommendation contains HCL."""
+        result = parse_response(fenced_codeblock_response_text)
+        assert result.parse_failed is False
+        assert result.verdict == "LOW"
+        assert len(result.findings) == 1
+        assert "```hcl" in result.findings[0].recommendation

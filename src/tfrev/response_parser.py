@@ -128,7 +128,13 @@ def _extract_json(text: str) -> str:
     """Extract JSON from text that may contain markdown code fences or extra text."""
     # Prefer an explicitly ```json-tagged fence when one exists, since Claude may
     # include other fenced blocks (hcl examples, etc.) alongside the JSON answer.
-    json_fence = re.search(r"```json\s*\n?(.*?)\n?```", text, re.DOTALL)
+    #
+    # Require a real newline (\n, 0x0A) before the closing ```.  JSON string
+    # values that contain Markdown code fences encode their newlines as the
+    # two-character escape sequence \n (0x5C 0x6E), which does NOT match \n in
+    # a regex.  Without this requirement the non-greedy .*? would stop at the
+    # first ``` inside a recommendation string, yielding truncated JSON.
+    json_fence = re.search(r"```json\s*\n?(.*?)\n```", text, re.DOTALL)
     if json_fence:
         return json_fence.group(1).strip()
 
