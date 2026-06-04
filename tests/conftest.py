@@ -105,6 +105,11 @@ def fenced_response_text() -> str:
 
 
 @pytest.fixture
+def fenced_codeblock_response_text() -> str:
+    return (FIXTURES_DIR / "response_fenced_codeblock_in_string.txt").read_text()
+
+
+@pytest.fixture
 def pass_result(pass_response_text: str) -> ReviewResult:
     return parse_response(pass_response_text)
 
