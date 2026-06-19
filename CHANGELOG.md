@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-06-19
+
+### Fixed
+- JSON extraction no longer truncates Claude responses whose string values (e.g. a `recommendation`) embed a Markdown code fence. The `json_fence` regex now requires a real newline (`0x0A`) before the closing ```` ``` ````, so an escaped `\n```…` sequence inside a string is no longer mistaken for the end of the outer ```` ```json ```` block, which previously yielded truncated, unparseable JSON ([#9](https://github.com/bishalOps/tfrev/pull/9))
+
 ## [2.2.0] - 2026-05-22
 
 ### Added
